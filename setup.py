@@ -5,9 +5,9 @@ with open("README.md","r") as fh:
     long_description = fh.read()
 
 setuptools.setup(
-    name = "twitter-nlp-toolkit", # name shown on pypi and used with import
+    name = "twitter_nlp_toolkit", # name shown on pypi and used with import
     # All the scripts need to be inside numdata
-    version ="0.0.1",
+    version ="0.0.1.4",
     author = "Dr. Eric Schibli , Mohamad (Moe) Antar",
     author_email = "moe.antar14@gmail.com",
     description = "Tools for collecting , processing and analyzing twitter data",
@@ -23,8 +23,7 @@ setuptools.setup(
     install_requires=[
           'numpy',
           'pandas',
-          'sklearn',
-          'keras',
+          'scikit-learn',
           
       ],
     python_requires='>=3.6',
