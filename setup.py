@@ -23,8 +23,7 @@ setuptools.setup(
     install_requires=[
           'numpy',
           'pandas',
-          'sklearn.feature_extraction.text',
-          'sklearn.linear_model',
+          'sklearn',
           'keras',
           
       ],
