@@ -1,11 +1,12 @@
 import tweepy
+import csv
 
-class twitter_REST_downloader(consumer_key,consumer_secret,access_key,access_secret):
-    def __init__(self):
-        this.consumer_key = consumer_key
-        this.consumer_secret = consumer_secret
-        this.access_key = access_key
-        this.access_secret = access_secret
+class bulk_downloader:
+    def __init__(self,consumer_key,consumer_secret,access_key,access_secret):
+        self.consumer_key = consumer_key
+        self.consumer_secret = consumer_secret
+        self.access_key = access_key
+        self.access_secret = access_secret
 
     def get_tweets_csv_for_this_user(self,screen_name,output_file_name):
         #Script adapted from: https://gist.github.com/yanofsky/5436496
