@@ -9,3 +9,5 @@
 /*.egg
 
 /build/
+
+*.csv

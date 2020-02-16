@@ -1,1 +1,4 @@
 include twitter-nlp-toolkit/data/*
+exclude models/*
+exclude data/*
+exclude demo*
