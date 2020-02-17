@@ -52,33 +52,31 @@ class StdOutListener(tweepy.StreamListener):
         return result.rstrip()
 
     def on_data(self, data):
-        # Based on the interval chosen by the user, let the user know how many tweets have been collected so far
-        if self.num_tweets % self.notification_interval == 0:
-            print("(%d) Tweets Collected So far" % self.num_tweets)
-
-        # Increment the number of tweets collected by 1
-        self.num_tweets += 1
-
-        # This is the main script that collects the tweets
-        # It will terminate when it hits the tweets limit
-        if self.num_tweets < self.tweet_limit:
-
-            tweet_text = self.sanitize_string(json.loads(data)["text"])
-
-            try:
-                with open('%s.csv' % self.file_label, 'a', newline='', encoding='utf-8') as csv_file:
-                    writer = csv.writer(csv_file, delimiter=" ")
-                    writer.writerow([tweet_text])
-
-            except KeyboardInterrupt:
-                print("Keyboard Interrupt: Ending Stream")
-            except BaseException as e:
-                print(str(e))
-            return True
-        else:
-            print("Tweet Limit Reached: (%d) .... Closing Stream " %
-                  self.num_tweets)
-            return False
+			# Based on the interval chosen by the user, let the user know 
+			# how many tweets have been collected so far
+        if (self.num_tweets % self.notification_interval == 0):
+            print("\t" + str(self.num_tweets) + " tweets collected...")
+						
+			# Increment the number of tweets collected by 1
+            self.num_tweets += 1
+			
+			# Open file where to save tweets
+			#f = open('%s.json' %self.file_label, 'a')
+			
+			# This is the main script that collects the tweets
+			# It will terminate when it hits the tweets limit
+            if (self.num_tweets < self.tweet_limit):
+                try:
+                    with open('%s' %self.file_label, 'a') as f:
+                        f.write(data)
+                except KeyboardInterrupt:
+                    print("Keyboard Interrupt: Ending Stream")
+                except BaseException as e:
+                    print(str(e))
+                return True
+            else:
+                print("Tweet Limit Reached: (%d) .... Closing Stream " % self.num_tweets)
+                return False
 
     def on_error(self, status):
         print(status)
@@ -87,11 +85,6 @@ class StdOutListener(tweepy.StreamListener):
 # Set listener parameters
 def initialize_listener(max_tweets, file_label, console_interval):
     print("\nInitializing listener... ")
-
-    # Create the output csv if it doesn't exist
-    if not os.path.exists('%s.csv' % file_label):
-        with open('%s.csv' % file_label, 'a') as f:
-            f.write("Text\n")
 
     # Initialize listener
     created_listener = StdOutListener()
