@@ -13,7 +13,7 @@ setuptools.setup(
     description = "Tools for collecting , processing and analyzing twitter data",
     long_description = long_description,
     long_description_content_type="text/markdown",
-    url="", # url of github repo
+    url="https://github.com/eschibli/twitter-toolbox", # url of github repo
     keywords = "package numbers calculations",
     packages=setuptools.find_packages(),
     classifiers=[
