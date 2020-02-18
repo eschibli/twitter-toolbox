@@ -1,14 +1,19 @@
 import numpy as np
 import pandas as pd
+import pickle as pkl
+import json
+import os
+
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
+from sklearn.linear_model import LogisticRegression
+
+import keras
 from keras.preprocessing.text import Tokenizer
 from keras.preprocessing.sequence import pad_sequences
-from sklearn.linear_model import LogisticRegression
-import keras
 
-# TODO add docstrings
-# TODO implement keywords properly
+
+# TODO consider renaming glove to pre-trained as it in principle should work with any pre-trained index
 
 
 def tokenizer_filter(text, remove_punctuation=True, remove_stopwords=True, lemmatize=True,
@@ -139,6 +144,75 @@ class SentimentAnalyzer:
 
         return np.round(np.mean(prediction, axis=0))
 
+    def save_models(self, filename):
+        """
+        Write models to disk for re-use
+        :param filename: (String) Name of folder to save files in
+        """
+        os.makedirs(filename, exist_ok=True)
+
+        if self.bow_param is not None:
+            json.dump(self.bow_param, open(filename + '/bow_param.json', 'w+'))
+            self.BoW_classifier.export(filename)
+            print('BoW model saved')
+        if self.lstm_param is not None:
+            json.dump(self.lstm_param, open(filename + '/lstm_param.json', 'w+'))
+            self.LSTM_classifier.export(filename)
+            print('LSTM model saved')
+        if self.glove_param is not None:
+            json.dump(self.glove_param, open(filename + '/glove_param.json', 'w+'))
+            with open(filename + '/glove_index.pkl', 'wb+') as outfile:
+                pkl.dump(self.glove_index, outfile)
+            self.LSTM_GloVE_classifier.export(filename)
+            print('Pre-trained embedding model saved')
+
+    def load_models(self, filename):
+        """
+        Reloads a saved model from the disk
+        :param filename: (String) Name of folder to read from
+        """
+        # Check for a BoW model
+        try:
+            with open(filename + '/bow_param.json', 'r') as infile:
+                self.bow_param = json.load(infile)
+            self.BoW_classifier = self.BoW_Model(**self.bow_param)
+            self.BoW_classifier.load_model(filename)
+            print('BoW model loaded successfully')
+        except FileNotFoundError:
+            print('No BoW model found')
+        except IOError:
+            print('Problem reading BoW files')
+
+        ###
+        # Check for a trained lstm model
+        ###
+
+        try:
+            with open(filename + '/lstm_param.json', 'r') as infile:
+                self.lstm_param = json.load(infile)
+            self.LSTM_classifier = self.LSTM_Model(**self.lstm_param)
+            self.LSTM_classifier.load_model(filename)
+            print('LSTM model loaded successfully')
+        except FileNotFoundError:
+            print('No LSTM model found')
+        except IOError:
+            print('Problem reading LSTM files')
+
+        ###
+        # Check for a pre-trained embedding model
+        ###
+
+        try:
+            self.glove_param = json.load(open(filename + '/glove_param.json', 'r'))
+            self.glove_index = pkl.load(open(filename + '/glove_index.pkl', 'rb'))
+            self.LSTM_GloVE_classifier = self.GloVE_Model(self.glove_index, **self.glove_param)
+            self.LSTM_GloVE_classifier.load_model(filename)
+            print('Pre-trained embedding model loaded successfully')
+        except FileNotFoundError:
+            print('No pre-trained embedding model found')
+        except IOError:
+            print('Problem reading pre-trained embedding model files')
+
     class BoW_Model:
 
         def __init__(self, vocab_size=100000, max_iter=10000, **kwargs):
@@ -187,7 +261,7 @@ class SentimentAnalyzer:
             """
             Makes predictions
             :param data: (List-like) List of strings to predict sentiment
-            :return: (vector) Un-binarized Predictions 
+            :return: (vector) Un-binarized Predictions
             """
             if self.classifier is None:
                 raise ValueError('Model has not been trained!')
@@ -195,6 +269,24 @@ class SentimentAnalyzer:
             cleaned_data = [' '.join(tweet) for tweet in filtered_data]
             X = self.vectorizer.transform(cleaned_data)
             return self.classifier.predict(X)
+
+        def export(self, filename):
+            """
+            Saves the model to disk
+            :param filename: (String) Path to file
+            """
+            with open(filename + '/bow_vectorizer.pkl', 'wb+') as outfile:
+                pkl.dump(self.vectorizer, outfile)
+            with open(filename + '/bow_classifier.pkl', 'wb+') as outfile:
+                pkl.dump(self.classifier, outfile)
+
+        def load_model(self, filename):
+            """
+            :param filename: (String) Path to file
+            """
+
+            self.vectorizer = pkl.load(open(filename + '/bow_vectorizer.pkl', 'rb'))
+            self.classifier = pkl.load(open(filename + '/bow_classifier.pkl', 'rb'))
 
     class GloVE_Model:
 
@@ -225,7 +317,7 @@ class SentimentAnalyzer:
             self.batch_size = batch_size
             self.embed_vec_len = 200
 
-            self.vectorizer = None
+            self.tokenizer = None
             self.classifier = None
             self.word_index = None
             self.embedding_matrix = None
@@ -296,28 +388,28 @@ class SentimentAnalyzer:
             print(self.classifier.summary())
             self.classifier.fit(X, y, batch_size=self.batch_size, epochs=self.max_iter, verbose=1)
 
-            def refine(self, train_data, y, **kwargs):
-                """
-                Train model further
-                :param train_data:
-                :param y:
-                :param max_iter:
-                :param vocab_size:
-                :return:
-                """
+        def refine(self, train_data, y, **kwargs):
+            """
+            Train model further
+            :param train_data:
+            :param y:
+            :param max_iter:
+            :param vocab_size:
+            :return:
+            """
 
-                """
-                # Preprocess and tokenize text
-                """
+            """
+            # Preprocess and tokenize text
+            """
 
-                filtered_data = tokenizer_filter(train_data, remove_punctuation=False, remove_stopwords=False,
-                                                 lemmatize=True)
-                cleaned_data = [' '.join(tweet) for tweet in filtered_data]
-                train_sequences = self.tokenizer.texts_to_sequences(cleaned_data)
+            filtered_data = tokenizer_filter(train_data, remove_punctuation=False, remove_stopwords=False,
+                                             lemmatize=True)
+            cleaned_data = [' '.join(tweet) for tweet in filtered_data]
+            train_sequences = self.tokenizer.texts_to_sequences(cleaned_data)
 
-                X = pad_sequences(train_sequences, maxlen=self.max_length, padding='pre')
+            X = pad_sequences(train_sequences, maxlen=self.max_length, padding='pre')
 
-                self.classifier.fit(X, y, batch_size=self.batch_size, epochs=self.max_iter, verbose=1)
+            self.classifier.fit(X, y, batch_size=self.batch_size, epochs=self.max_iter, verbose=1)
 
         def predict(self, data):
             from keras.preprocessing.sequence import pad_sequences
@@ -327,6 +419,28 @@ class SentimentAnalyzer:
             cleaned_data = [' '.join(tweet) for tweet in filtered_data]
             X = pad_sequences(self.tokenizer.texts_to_sequences(cleaned_data), maxlen=self.max_length)
             return self.classifier.predict(X)
+
+        def export(self, filename):
+            """
+            Saves the model to disk
+            :param filename: (String) Path to file
+            """
+            with open(filename + '/glove_tokenizer.pkl', 'wb+') as outfile:
+                pkl.dump(self.tokenizer, outfile)
+            model_json = self.classifier.to_json()
+            with open(filename + "/glove_model.json", "w") as json_file:
+                json_file.write(model_json)
+            self.classifier.save_weights(filename + "/glove_model.h5")
+
+        def load_model(self, filename):
+            """
+            :param filename: (String) Path to file
+            """
+            self.tokenizer = pkl.load(open(filename + '/glove_tokenizer.pkl', 'rb'))
+            with open(filename + '/glove_model.json', 'r') as infile:
+                model_json = infile.read()
+            self.classifier = keras.models.model_from_json(model_json)
+            self.classifier.load_weights(filename + '/glove_model.h5')
 
     class LSTM_Model:
 
@@ -401,7 +515,7 @@ class SentimentAnalyzer:
             init = keras.initializers.glorot_uniform(seed=1)
             optimizer = self.optimizer
 
-            # TODO input_dim is kludged, MUST FIX - should be able to trim embedding matrix in embed_glove.py
+            # TODO input_dim is kludged - should be able to trim embedding matrix in embed_glove.py
 
             self.classifier = keras.models.Sequential()
 
@@ -450,3 +564,25 @@ class SentimentAnalyzer:
             cleaned_data = [' '.join(tweet) for tweet in filtered_data]
             X = pad_sequences(self.tokenizer.texts_to_sequences(cleaned_data), maxlen=self.max_length)
             return self.classifier.predict(X)
+
+        def export(self, filename):
+            """
+            Saves the model to disk
+            :param filename: (String) Path to file
+            """
+            with open(filename + '/lstm_tokenizer.pkl', 'wb+') as outfile:
+                pkl.dump(self.tokenizer, outfile)
+            model_json = self.classifier.to_json()
+            with open(filename + "/lstm_model.json", "w") as json_file:
+                json_file.write(model_json)
+            self.classifier.save_weights(filename + "/lstm_model.h5")
+
+        def load_model(self, filename):
+            """
+            :param filename: (String) Path to file
+            """
+            self.tokenizer = pkl.load(open(filename + '/lstm_tokenizer.pkl', 'rb'))
+            with open(filename + '/lstm_model.json', 'r') as infile:
+                model_json = infile.read()
+            self.classifier = keras.models.model_from_json(model_json)
+            self.classifier.load_weights(filename + '/lstm_model.h5')
