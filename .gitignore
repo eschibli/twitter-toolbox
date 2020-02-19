@@ -16,3 +16,5 @@
 *.zip
 *.csv
 *.pkl
+
+push_to_pypi.bat
