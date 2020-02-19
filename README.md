@@ -5,13 +5,13 @@ A suite of tools for collecting, pre-processing, analyzing and sentiment-scoring
 
 Developers:
  
-  Moe Antar (@Moe520)
+  *Moe Antar (@Moe520)
     -Twitter json parser and formatter
     -Twitter bulk downloader 
     -Twitter Listener 
     -File downloading and uncompressing modules
     
-  Eric Schibli (@eschibli)
+  *Eric Schibli (@eschibli)
     -Natural language processing algorithms
     -Logistic regression models and ensembles
     -LSTM Neural Nets
