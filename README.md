@@ -5,18 +5,18 @@ A suite of tools for collecting, pre-processing, analyzing and sentiment-scoring
 
 Developers:
  
- *Moe Antar (@Moe520)
--Twitter json parser and formatter
--Twitter bulk downloader 
--Twitter Listener 
--File downloading and uncompressing modules
+*Moe Antar (@Moe520)
+ *Twitter json parser and formatter
+ *Twitter bulk downloader 
+ *Twitter Listener 
+ *File downloading and uncompressing modules
     
 *Eric Schibli (@eschibli)
--Natural language processing algorithms
--Logistic regression models and ensembles
--LSTM Neural Nets
--Vector embedding algorithms
--Data pre-processing pipeline
--General model optimization
+ *Natural language processing algorithms
+ *Logistic regression models and ensembles
+ *LSTM Neural Nets
+ *Vector embedding algorithms
+ *Data pre-processing pipeline
+ *General model optimization
 
 Under construction but functional. Please see the notebook files for demonstrations.  
