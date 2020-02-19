@@ -1,6 +1,9 @@
 # Compiled python modules.
 *.pyc
 
+# trained models folder
+/trained_models/
+
 # Setuptools distribution folder.
 /dist/
 
