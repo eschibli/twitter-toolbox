@@ -19,4 +19,4 @@ Developers:
     * Data pre-processing pipeline
     * General model optimization
 
-Under construction but functional. Please see the jupyter notebook files for demonstrations.  
+Under construction but functional. Please see the jupyter notebook (.ipynb) files at the root directory for demonstrations.  
