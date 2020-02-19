@@ -9,6 +9,7 @@ Developers:
     * Twitter bulk downloader 
     * Twitter Listener 
     * File downloading and uncompressing modules
+    * General maintenance and deployment procedures
     
 * Eric Schibli (@eschibli)
     * Natural language processing algorithms
