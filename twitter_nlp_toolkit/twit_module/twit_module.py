@@ -6,7 +6,7 @@ import os
 
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
-from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score
 
 import keras
 from keras.preprocessing.text import Tokenizer
@@ -108,7 +108,7 @@ class SentimentAnalyzer:
             self.LSTM_classifier = self.LSTM_Model(**self.lstm_param)
             self.LSTM_classifier.fit(X, y)
 
-    def refine(self, X, y):
+    def refine(self, X, y, max_glove_iters=25, max_lstm_iters=25, max_bow_iters=25):
         """
         Refits the trained models onto additional data. Not that this does NOT retrain the tokenizers, so it will not
         retrain the vocabulary
@@ -117,16 +117,13 @@ class SentimentAnalyzer:
         """
 
         if self.glove_param is not None:
-            self.LSTM_GloVE_classifier = self.GloVE_Model(glove_index=self.glove_index, **self.glove_param)
-            self.LSTM_GloVE_classifier.refine(X, y)
+            self.LSTM_GloVE_classifier.refine(X, y, max_glove_iters)
 
         if self.bow_param is not None:
-            self.BoW_classifier = self.BoW_Model(**self.bow_param)
-            self.BoW_classifier.refine(X, y)
+            self.BoW_classifier.refine(X, y, max_bow_iters)
 
         if self.lstm_param is not None:
-            self.LSTM_classifier = self.LSTM_Model(**self.lstm_param)
-            self.LSTM_classifier.refine(X, y)
+            self.LSTM_classifier.refine(X, y, max_lstm_iters)
 
     def predict(self, X):
         """
@@ -144,7 +141,7 @@ class SentimentAnalyzer:
 
         return np.round(np.mean(prediction, axis=0))
 
-    def save_models(self, filename):
+    def save_models(self, filename, save_index=True):
         """
         Write models to disk for re-use
         :param filename: (String) Name of folder to save files in
@@ -161,8 +158,9 @@ class SentimentAnalyzer:
             print('LSTM model saved')
         if self.glove_param is not None:
             json.dump(self.glove_param, open(filename + '/glove_param.json', 'w+'))
-            with open(filename + '/glove_index.pkl', 'wb+') as outfile:
-                pkl.dump(self.glove_index, outfile)
+            if save_index:
+                with open(filename + '/glove_index.pkl', 'wb+') as outfile:
+                    pkl.dump(self.glove_index, outfile)
             self.LSTM_GloVE_classifier.export(filename)
             print('Pre-trained embedding model saved')
 
@@ -193,6 +191,8 @@ class SentimentAnalyzer:
             self.LSTM_classifier = self.LSTM_Model(**self.lstm_param)
             self.LSTM_classifier.load_model(filename)
             print('LSTM model loaded successfully')
+            self.LSTM_classifier.classifier.compile(loss='binary_crossentropy',
+                                                    optimizer=self.LSTM_classifier.optimizer, metrics=['acc'])
         except FileNotFoundError:
             print('No LSTM model found')
         except IOError:
@@ -207,11 +207,33 @@ class SentimentAnalyzer:
             self.glove_index = pkl.load(open(filename + '/glove_index.pkl', 'rb'))
             self.LSTM_GloVE_classifier = self.GloVE_Model(self.glove_index, **self.glove_param)
             self.LSTM_GloVE_classifier.load_model(filename)
+            self.LSTM_GloVE_classifier.classifier.compile(loss='binary_crossentropy',
+                                                    optimizer=self.LSTM_GloVE_classifier.optimizer, metrics=['acc'])
             print('Pre-trained embedding model loaded successfully')
         except FileNotFoundError:
             print('No pre-trained embedding model found')
         except IOError:
             print('Problem reading pre-trained embedding model files')
+
+    def evaluate(self, X, y, metric=accuracy_score):
+        """
+        Evaluate each model
+        :param X: (array) Feature matrix
+        :param y: (vector) targets
+        :param metric: (method) Metric to use
+        """
+        scores = {}
+        scores['ensembled'] = metric(y, np.round(self.predict(X)))
+        if self.BoW_classifier is not None:
+            scores['BoW'] = metric(y, np.round(self.BoW_classifier.predict(X)))
+            print("BoW: %0.3f" % scores['BoW'])
+        if self.LSTM_classifier is not None:
+            scores['LSTM'] = metric(y, np.round(self.LSTM_classifier.predict(X)))
+            print("LSTM: %0.3f" % scores['LSTM'])
+        if self.LSTM_GloVE_classifier is not None:
+            scores['Glove'] = metric(y, np.round(self.LSTM_GloVE_classifier.predict(X)))
+            print("Pre-trained embedding: %0.3f" % scores['Glove'])
+        return scores
 
     class BoW_Model:
 
@@ -243,7 +265,7 @@ class SentimentAnalyzer:
             self.classifier = LogisticRegression(random_state=0, max_iter=self.max_iter).fit(X, y)
             self.classifier.fit(X, y)
 
-        def refine(self, train_data, y):
+        def refine(self, train_data, y, max_iters):
             """
             Train the models further
             :param train_data: (List-like) List of strings to train on
@@ -254,7 +276,7 @@ class SentimentAnalyzer:
 
             cleaned_data = [' '.join(tweet) for tweet in filtered_data]
             X = self.vectorizer.transform(cleaned_data)
-            self.classifier = LogisticRegression(random_state=0, max_iter=self.max_iter).fit(X, y)
+            self.classifier = LogisticRegression(random_state=0, max_iter=max_iters).fit(X, y)
             self.classifier.fit(X, y)
 
         def predict(self, data):
@@ -388,7 +410,7 @@ class SentimentAnalyzer:
             print(self.classifier.summary())
             self.classifier.fit(X, y, batch_size=self.batch_size, epochs=self.max_iter, verbose=1)
 
-        def refine(self, train_data, y, **kwargs):
+        def refine(self, train_data, y, max_iters):
             """
             Train model further
             :param train_data:
@@ -409,7 +431,7 @@ class SentimentAnalyzer:
 
             X = pad_sequences(train_sequences, maxlen=self.max_length, padding='pre')
 
-            self.classifier.fit(X, y, batch_size=self.batch_size, epochs=self.max_iter, verbose=1)
+            self.classifier.fit(X, y, batch_size=self.batch_size, epochs=max_iters, verbose=1)
 
         def predict(self, data):
             from keras.preprocessing.sequence import pad_sequences
@@ -428,7 +450,7 @@ class SentimentAnalyzer:
             with open(filename + '/glove_tokenizer.pkl', 'wb+') as outfile:
                 pkl.dump(self.tokenizer, outfile)
             model_json = self.classifier.to_json()
-            with open(filename + "/glove_model.json", "w") as json_file:
+            with open(filename + "/glove_model.json", "w+") as json_file:
                 json_file.write(model_json)
             self.classifier.save_weights(filename + "/glove_model.h5")
 
@@ -533,7 +555,7 @@ class SentimentAnalyzer:
             print(self.classifier.summary())
             self.classifier.fit(X, y, batch_size=self.batch_size, epochs=self.max_iter, verbose=1)
 
-        def refine(self, train_data, y, **kwargs):
+        def refine(self, train_data, y, max_iters):
             """
             Train model further
             :param train_data:
@@ -554,7 +576,7 @@ class SentimentAnalyzer:
 
             X = pad_sequences(train_sequences, maxlen=self.max_length, padding='pre')
 
-            self.classifier.fit(X, y, batch_size=self.batch_size, epochs=self.max_iter, verbose=1)
+            self.classifier.fit(X, y, batch_size=self.batch_size, epochs=max_iters, verbose=1)
 
         def predict(self, data):
             from keras.preprocessing.sequence import pad_sequences
@@ -573,7 +595,7 @@ class SentimentAnalyzer:
             with open(filename + '/lstm_tokenizer.pkl', 'wb+') as outfile:
                 pkl.dump(self.tokenizer, outfile)
             model_json = self.classifier.to_json()
-            with open(filename + "/lstm_model.json", "w") as json_file:
+            with open(filename + "/lstm_model.json", "w+") as json_file:
                 json_file.write(model_json)
             self.classifier.save_weights(filename + "/lstm_model.h5")
 
