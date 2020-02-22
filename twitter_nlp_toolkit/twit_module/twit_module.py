@@ -14,7 +14,8 @@ from keras.preprocessing.sequence import pad_sequences
 
 
 # TODO consider renaming glove to pre-trained as it in principle should work with any pre-trained index
-
+# TODO Make early stopping adjustable
+# TODO enforce saving all parameters, including defaults, to make old models loadable if defaults are changed
 
 def tokenizer_filter(text, remove_punctuation=True, remove_stopwords=True, lemmatize=True,
                      lemmatize_pronouns=False):
@@ -222,6 +223,7 @@ class SentimentAnalyzer:
         :param y: (vector) targets
         :param metric: (method) Metric to use
         """
+
         scores = {}
         scores['ensembled'] = metric(y, np.round(self.predict(X)))
         if self.BoW_classifier is not None:
@@ -408,7 +410,9 @@ class SentimentAnalyzer:
             self.classifier.add(keras.layers.Dense(units=1, kernel_initializer=init, activation=activ))
             self.classifier.compile(loss=costfunction, optimizer=optimizer, metrics=['acc'])
             print(self.classifier.summary())
-            self.classifier.fit(X, y, batch_size=self.batch_size, epochs=self.max_iter, verbose=1)
+            es = keras.callbacks.EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=50)
+            self.classifier.fit(X, y, validation_split=0.1, batch_size=self.batch_size, epochs=self.max_iter,
+                                callbacks=[es], verbose=1)
 
         def refine(self, train_data, y, max_iters):
             """
@@ -553,7 +557,8 @@ class SentimentAnalyzer:
             self.classifier.add(keras.layers.Dense(units=1, kernel_initializer=init, activation=activ))
             self.classifier.compile(loss=costfunction, optimizer=optimizer, metrics=['acc'])
             print(self.classifier.summary())
-            self.classifier.fit(X, y, batch_size=self.batch_size, epochs=self.max_iter, verbose=1)
+            es = keras.callbacks.EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=50)
+            self.classifier.fit(X, y, validation_split=0.1, callbacks=[es], batch_size=self.batch_size, epochs=self.max_iter, verbose=1)
 
         def refine(self, train_data, y, max_iters):
             """
