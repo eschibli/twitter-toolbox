@@ -408,7 +408,9 @@ class SentimentAnalyzer:
             self.classifier.add(keras.layers.Dense(units=1, kernel_initializer=init, activation=activ))
             self.classifier.compile(loss=costfunction, optimizer=optimizer, metrics=['acc'])
             print(self.classifier.summary())
-            self.classifier.fit(X, y, batch_size=self.batch_size, epochs=self.max_iter, verbose=1)
+            es = keras.callbacks.EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=50)
+            self.classifier.fit(X, y, validation_split=0.1, batch_size=self.batch_size, epochs=self.max_iter,
+                                callbacks=[es], verbose=1)
 
         def refine(self, train_data, y, max_iters):
             """
@@ -553,7 +555,8 @@ class SentimentAnalyzer:
             self.classifier.add(keras.layers.Dense(units=1, kernel_initializer=init, activation=activ))
             self.classifier.compile(loss=costfunction, optimizer=optimizer, metrics=['acc'])
             print(self.classifier.summary())
-            self.classifier.fit(X, y, batch_size=self.batch_size, epochs=self.max_iter, verbose=1)
+            es = keras.callbacks.EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=50)
+            self.classifier.fit(X, y, validation_split=0.1, callbacks=[es], batch_size=self.batch_size, epochs=self.max_iter, verbose=1)
 
         def refine(self, train_data, y, max_iters):
             """
