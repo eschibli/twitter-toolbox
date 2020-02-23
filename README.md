@@ -7,7 +7,7 @@ Developers:
 * Moe Antar (@Moe520) 
     * Twitter json parser and formatter
     * Twitter bulk downloader 
-    * Twitter Listener 
+    * Twitter Listener , in collaboration with Dr. Mirko Miorelli (https://github.com/mirkomiorelli)
     * File downloading and uncompressing modules
     * General maintenance and deployment procedures
     
