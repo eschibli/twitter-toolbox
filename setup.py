@@ -6,7 +6,6 @@ with open("README.md","r") as fh:
 
 setuptools.setup(
     name = "twitter_nlp_toolkit", # name shown on pypi and used with import
-    # All the scripts need to be inside numdata
     version ="0.0.3",
     author = "Dr. Eric Schibli , Mohamad (Moe) Antar",
     author_email = "moe.antar14@gmail.com",
