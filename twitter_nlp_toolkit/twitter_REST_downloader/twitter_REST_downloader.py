@@ -2,7 +2,7 @@ import tweepy
 import csv
 
 class bulk_downloader:
-    def __init__(self,consumer_key,consumer_secret,access_key,access_secret):
+    def __init__(self,consumer_key,consumer_secret,access_token,access_secret):
         self.consumer_key = consumer_key
         self.consumer_secret = consumer_secret
         self.access_key = access_key
