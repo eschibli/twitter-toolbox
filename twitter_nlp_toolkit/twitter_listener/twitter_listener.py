@@ -52,22 +52,22 @@ class StdOutListener(tweepy.StreamListener):
         return result.rstrip()
 
     def on_data(self, data):
-			# Based on the interval chosen by the user, let the user know 
-			# how many tweets have been collected so far
+        # Based on the interval chosen by the user, let the user know
+        # how many tweets have been collected so far
         if (self.num_tweets % self.notification_interval == 0):
             print("\t" + str(self.num_tweets) + " tweets collected...")
-						
-			# Increment the number of tweets collected by 1
+
+            # Increment the number of tweets collected by 1
             self.num_tweets += 1
-			
-			# Open file where to save tweets
-			#f = open('%s.json' %self.file_label, 'a')
-			
-			# This is the main script that collects the tweets
-			# It will terminate when it hits the tweets limit
+
+            # Open file where to save tweets
+            # f = open('%s.json' %self.file_label, 'a')
+
+            # This is the main script that collects the tweets
+            # It will terminate when it hits the tweets limit
             if (self.num_tweets < self.tweet_limit):
                 try:
-                    with open('%s' %self.file_label, 'a') as f:
+                    with open('%s' % self.file_label, 'a') as f:
                         f.write(data)
                 except KeyboardInterrupt:
                     print("Keyboard Interrupt: Ending Stream")
@@ -126,8 +126,14 @@ def collect_tweets_from_stream(subjects, max_tweets, file_label,
         print("Listening function: Termination Caused by Unknown Error: ", str(e))
 
 
-# Stream from twitter and collect data
 def collect_stream(my_listener, auth_credentials, keywords):
+    """
+    # Stream from twitter and collect dat
+    :param my_listener:
+    :param auth_credentials:
+    :param keywords:
+    :return:
+    """
     count = 1
     # Maximum connections: 3 in 15 minutes
     while count < 4:
@@ -158,9 +164,6 @@ def collect_stream(my_listener, auth_credentials, keywords):
     return
 
 
-
-
-
 class stream_listener:
     # Initializer / Instance Attributes
     def __init__(self, consumer_key, consumer_secret, access_token, access_secret):
@@ -175,11 +178,6 @@ class stream_listener:
         self.auth = tweepy.OAuthHandler(self.consumer_key, self.consumer_secret)
         self.auth.set_access_token(self.access_token, self.access_secret)
 
-    def collect_from_stream(self, max_tweets, output_json_name, console_interval,target_words):
+    def collect_from_stream(self, max_tweets, output_json_name, console_interval, target_words):
         current_listener = initialize_listener(max_tweets, output_json_name, console_interval)
-        collect_stream(current_listener, self.auth,target_words)
-
-
-
-
-
+        collect_stream(current_listener, self.auth, target_words)
