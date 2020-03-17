@@ -55,7 +55,7 @@ class StdOutListener(tweepy.StreamListener):
         # Based on the interval chosen by the user, let the user know
         # how many tweets have been collected so far
         if (self.num_tweets % self.notification_interval == 0):
-            print("\t" + str(self.num_tweets) + " tweets collected...")
+            print("\t" + str(self.num_tweets) + " tweets collected...", end="\r")
 
             # Increment the number of tweets collected by 1
             self.num_tweets += 1

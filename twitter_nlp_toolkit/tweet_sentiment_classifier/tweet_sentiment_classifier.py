@@ -7,6 +7,8 @@ import os
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score
+from sklearn.utils import resample
+from sklearn.model_selection import train_test_split
 
 import keras
 from keras.preprocessing.text import Tokenizer
@@ -72,19 +74,23 @@ def tokenizer_filter(text, remove_punctuation=True, remove_stopwords=True, lemma
 
 
 class SentimentAnalyzer:
-    def __init__(self, bow_param=None, lstm_param=None, glove_param=None, glove_index=None):
+    def __init__(self, models=[]):
         """
         Constructor for SentimentAnalyzer module
-        :param BoW: (bool)
+        :param models: (list) Models to initialize. Should be a list of tuples formatted like (name, type, params)
+        type can be 'bow', 'lstm', or 'glove', and params is a dictionary of parameters
         """
-        self.BoW_classifier = None
-        self.LSTM_GloVE_classifier = None
-        self.LSTM_classifier = None
+        self.models = {}
 
-        self.bow_param = bow_param
-        self.lstm_param = lstm_param
-        self.glove_param = glove_param
-        self.glove_index = glove_index
+        for name, type, params in models:
+            if type == 'bow':
+                self.add_bow_model(name, **params)
+            elif type == 'lstm':
+                self.add_lstm_model(name, **params)
+            elif type == 'glove':
+                self.add_glove_model(name, **params)
+            else:
+                print('Model type %s not recognized' % type)
 
     def add_bow_model(self, name, **kwargs):
         """
@@ -93,7 +99,7 @@ class SentimentAnalyzer:
         :param kwargs: Model keywords
         :return:
         """
-        self.models.add(self.BoW_Model(**kwargs))
+        self.models[name] = self.BoW_Model(**kwargs)
 
     def add_lstm_model(self, name, **kwargs):
         """
@@ -102,18 +108,36 @@ class SentimentAnalyzer:
         :param kwargs: Model keywords
         :return:
         """
-        self.models.add(self.LSTM_Model(**kwargs))
+        self.models[name] = self.LSTM_Model(**kwargs)
 
     def add_glove_model(self, name, glove_index, **kwargs):
         """
         Add another lstm model with pre-trained embeddings to the classifier
         :param name: (String) A name to refer to the model
+        :param glove_index: (dict) The embedding dictionary
         :param kwargs: Model keywords
         :return:
         """
-        self.models.add(self.GloVE_Model(glove_index, **kwargs))
+        self.models[name] = self.GloVE_Model(glove_index, **kwargs)
 
-    def fit(self, X, y):
+    def delete_models(self, models):
+        for model in models:
+            self.delete_model(model)
+
+    def delete_model(self, model):
+        del self.models[model]
+
+    def trim_models(self, testX, testY, threshold=0.7, metric=accuracy_score, models=[]):
+        if len(models) == 0:
+            models = self.models.keys()
+        for name, model in models.items():
+            score = metric(testY, model.predict(testX))
+            print('Model %s score: %0.3f' % (name, score))
+            if score < threshold:
+                print('Deleting model %s' % name)
+                del self.models[name]
+
+    def fit(self, X, y, models=[]):
         """
         Fits the enabled models onto X. Note that this rebuilds the models, as it is not currently possible to update
         the tokenizers
@@ -121,43 +145,17 @@ class SentimentAnalyzer:
         :param y: (vector) Targets
         :return:
         """
+        if len(models) == 0:
+            models = self.models.keys()
 
-        if self.glove_param is not None:
-            self.LSTM_GloVE_classifier = self.GloVE_Model(glove_index=self.glove_index, **self.glove_param)
-            self.LSTM_GloVE_classifier.fit(X, y)
+        for name in models:
+            try:
+                print('Fitting %s' % name)
+                self.models[name].fit(X, y)
+            except KeyError:
+                print('Model %s not found!' % name)
 
-        if self.bow_param is not None:
-            self.BoW_classifier = self.BoW_Model(**self.bow_param)
-            self.BoW_classifier.fit(X, y)
-
-        if self.lstm_param is not None:
-            self.LSTM_classifier = self.LSTM_Model(**self.lstm_param)
-            self.LSTM_classifier.fit(X, y)
-
-        for model in self.models:
-            model.fit(X, y)
-
-        """
-
-        Old code, remove
-
-        if self.glove_param is not None:
-            self.LSTM_GloVE_classifier = self.GloVE_Model(glove_index=self.glove_index, **self.glove_param)
-            self.LSTM_GloVE_classifier.fit(X, y, early_stopping=early_stopping, validation_split=validation_split,
-                                           patience=patience)
-
-        if self.bow_param is not None:
-            self.BoW_classifier = self.BoW_Model(**self.bow_param)
-            self.BoW_classifier.fit(X, y)
-
-        if self.lstm_param is not None:
-            self.LSTM_classifier = self.LSTM_Model(**self.lstm_param)
-            self.LSTM_classifier.fit(X, y, early_stopping=early_stopping, validation_split=validation_split,
-                                     patience=patience)
-
-        """
-
-    def refine(self, X, y, max_glove_iters=25, max_lstm_iters=25, max_bow_iters=25):
+    def refine(self, X, y, **kwargs):
         """
         Refits the trained models onto additional data. Not that this does NOT retrain the tokenizers, so it will not
         retrain the vocabulary
@@ -165,14 +163,8 @@ class SentimentAnalyzer:
         :param y: (vector) Targets
         """
 
-        if self.glove_param is not None:
-            self.LSTM_GloVE_classifier.refine(X, y, max_glove_iters)
-
-        if self.bow_param is not None:
-            self.BoW_classifier.refine(X, y, max_bow_iters)
-
-        if self.lstm_param is not None:
-            self.LSTM_classifier.refine(X, y, max_lstm_iters)
+        for model in self.models.values():
+            model.refine(X, y, **kwargs)
 
     def predict(self, X):
         """
@@ -180,25 +172,30 @@ class SentimentAnalyzer:
         :param X:
         :return:
         """
-        prediction = []
-        if self.bow_param is not None:
-            prediction.append(self.BoW_classifier.predict(X).reshape(-1))
-        if self.glove_param is not None:
-            prediction.append(self.LSTM_GloVE_classifier.predict(X).reshape(-1))
-        if self.lstm_param is not None:
-            prediction.append(self.LSTM_classifier.predict(X).reshape(-1))
+        predictions = self.predict_proba(X)
 
-        return np.round(np.mean(prediction, axis=0))
+        return np.round(predictions)
 
+    def predict_proba(self, X):
+        predictions = []
 
-    def save_models(self, filename, save_index=True):
+        for model in self.models.values():
+            predictions.append(model.predict_proba(X).reshape(-1))
+
+        return np.mean(predictions, axis=0)
+
+    def save_models(self):
         """
         Write models to disk for re-use
         # TODO implement with proper filenames
         :param filename: (String) Name of folder to save files in
         """
-        os.makedirs(filename, exist_ok=True)
 
+        for name, model in self.models.items():
+            model.export(name)
+            print('Model %s saved' % name)
+
+        """
         if self.bow_param is not None:
             self.BoW_classifier.export(filename)
             print('BoW model saved')
@@ -212,57 +209,61 @@ class SentimentAnalyzer:
             self.LSTM_GloVE_classifier.export(filename)
             print('Pre-trained embedding model saved')
 
-    def load_models(self, filename):
+        """
+
+    def load_models(self, filenames):
         """
         Reloads a saved model from the disk
-        # TODO implement
-        :param filename: (String) Name of folder to read from
+        # TODO this is ugly, clean it up
+        :param filenames: (list) List of model names to import
         """
-        # Check for a BoW model
-        try:
-            with open(filename + '/bow_param.json', 'r') as infile:
-                self.bow_param = json.load(infile)
-            self.BoW_classifier = self.BoW_Model(**self.bow_param)
-            self.BoW_classifier.load_model(filename)
-            print('BoW model loaded successfully')
-        except FileNotFoundError:
-            print('No BoW model found')
-        except IOError:
-            print('Problem reading BoW files')
+        for filename in filenames:
+            self.load_model(filename)
 
-        ###
-        # Check for a trained lstm model
-        ###
+    def load_model(self, filename):
 
-        try:
-            with open(filename + '/lstm_param.json', 'r') as infile:
-                self.lstm_param = json.load(infile)
-            self.LSTM_classifier = self.LSTM_Model(**self.lstm_param)
-            self.LSTM_classifier.load_model(filename)
-            print('LSTM model loaded successfully')
-            self.LSTM_classifier.classifier.compile(loss='binary_crossentropy',
-                                                    optimizer=self.LSTM_classifier.optimizer, metrics=['acc'])
-        except FileNotFoundError:
-            print('No LSTM model found')
-        except IOError:
-            print('Problem reading LSTM files')
+        if os.path.exists(filename + '/bow_param.json'):
+            try:
+                with open(filename + '/bow_param.json', 'r') as infile:
+                    bow_param = json.load(infile)
+                self.models[filename] = self.BoW_Model(**bow_param)
+                self.models[filename].load_model(filename)
+                print('BoW model %s loaded successfully' % filename)
+            except FileNotFoundError:
+                print('Model %s not found' % filename)
+            except IOError:
+                print('Problem reading %s files' % filename)
 
-        ###
-        # Check for a pre-trained embedding model
-        ###
+        elif os.path.exists(filename + '/lstm_param.json'):
+            try:
+                with open(filename + '/lstm_param.json', 'r') as infile:
+                    lstm_param = json.load(infile)
+                self.models[filename] = self.LSTM_Model(**lstm_param)
+                self.models[filename].load_model(filename)
+                print('LSTM model %s loaded successfully' % filename)
+                self.models[filename].classifier.compile(loss='binary_crossentropy',
+                                                         optimizer=self.models[filename].optimizer, metrics=['acc'])
+            except FileNotFoundError:
+                print('No LSTM model found')
+            except IOError:
+                print('Problem reading LSTM files')
+        elif os.path.exists(filename + '/glove_param.json'):
+            try:
+                glove_param = json.load(open(filename + '/glove_param.json', 'r'))
+                glove_index = pkl.load(open(filename + '/glove_index.pkl', 'rb'))
+                self.models[filename] = self.GloVE_Model(glove_index, **glove_param)
+                self.models[filename].load_model(filename)
+                self.models[filename].classifier.compile(loss='binary_crossentropy',
+                                                              optimizer=self.models[filename].optimizer,
+                                                              metrics=['acc'])
+                print('Pre-trained embedding model loaded successfully')
+            except FileNotFoundError:
+                print('No pre-trained embedding model found')
+            except IOError:
+                print('Problem reading pre-trained embedding model files')
+        else:
+            print('Model %s not found' % filename)
 
-        try:
-            self.glove_param = json.load(open(filename + '/glove_param.json', 'r'))
-            self.glove_index = pkl.load(open(filename + '/glove_index.pkl', 'rb'))
-            self.LSTM_GloVE_classifier = self.GloVE_Model(self.glove_index, **self.glove_param)
-            self.LSTM_GloVE_classifier.load_model(filename)
-            self.LSTM_GloVE_classifier.classifier.compile(loss='binary_crossentropy',
-                                                    optimizer=self.LSTM_GloVE_classifier.optimizer, metrics=['acc'])
-            print('Pre-trained embedding model loaded successfully')
-        except FileNotFoundError:
-            print('No pre-trained embedding model found')
-        except IOError:
-            print('Problem reading pre-trained embedding model files')
 
     def evaluate(self, X, y, metric=accuracy_score):
         """
@@ -273,21 +274,15 @@ class SentimentAnalyzer:
         """
 
         scores = {}
-        scores['ensembled'] = metric(y, np.round(self.predict(X)))
-        if self.BoW_classifier is not None:
-            scores['BoW'] = metric(y, np.round(self.BoW_classifier.predict(X)))
-            print("BoW: %0.3f" % scores['BoW'])
-        if self.LSTM_classifier is not None:
-            scores['LSTM'] = metric(y, np.round(self.LSTM_classifier.predict(X)))
-            print("LSTM: %0.3f" % scores['LSTM'])
-        if self.LSTM_GloVE_classifier is not None:
-            scores['Glove'] = metric(y, np.round(self.LSTM_GloVE_classifier.predict(X)))
-            print("Pre-trained embedding: %0.3f" % scores['Glove'])
+        scores['ensembled'] = metric(y, self.predict(X))
+        for name, model in self.models.items():
+            scores[name] = metric(y, model.predict(X))
+            print('Model %s score: %0.3f' % (name, scores[name]))
         return scores
 
     class BoW_Model:
 
-        def __init__(self, vocab_size=100000, max_iter=10000, **kwargs):
+        def __init__(self, vocab_size=100000, max_iter=10000, validation_split=0.2, accuracy=0, bootstrap=1, **kwargs):
             """
             Constructor for BoW_Model
             Be sure to add additional parameters to export()
@@ -300,6 +295,10 @@ class SentimentAnalyzer:
             self.classifier = None
             self.vocab_size = vocab_size
             self.max_iter = max_iter
+            self.type = 'bow'
+            self.validation_split = validation_split
+            self.accuracy = accuracy
+            self.bootstrap = bootstrap
 
         def fit(self, train_data, y):
             """
@@ -308,13 +307,23 @@ class SentimentAnalyzer:
             :param y: (vector) Targets
             """
 
+            if self.bootstrap > 1:
+                train_data, y = resample(train_data, y, n_samples=self.bootstrap, stratify=y)
+            elif self.bootstrap < 1:
+                n_samples = int(self.bootstrap * len(y))
+                train_data, y = utils.resample(train_data, y, n_samples=n_samples, stratify=y)
+
             filtered_data = tokenizer_filter(train_data, remove_punctuation=True, remove_stopwords=True, lemmatize=True)
 
             self.vectorizer = TfidfVectorizer(analyzer=str.split, max_features=self.vocab_size)
             cleaned_data = [' '.join(tweet) for tweet in filtered_data]
             X = self.vectorizer.fit_transform(cleaned_data)
-            self.classifier = LogisticRegression(random_state=0, max_iter=self.max_iter).fit(X, y)
-            self.classifier.fit(X, y)
+
+            trainX, testX, trainY, testY = train_test_split(X, y, test_size=self.validation_split, stratify=y)
+
+            print('Fitting BoW model')
+            self.classifier = LogisticRegression(random_state=0, max_iter=self.max_iter).fit(trainX, trainY)
+            self.accuracy = accuracy_score(testY, self.classifier.predict(testX))
 
         def refine(self, train_data, y, max_iters=500, early_stopping=True, validation_split=0.1,
                                      patience=25):
@@ -334,6 +343,9 @@ class SentimentAnalyzer:
             self.classifier.fit(X, y)
 
         def predict(self, data):
+            return np.round(self.predict_proba(data))
+
+        def predict_proba(self, data):
             """
             Makes predictions
             :param data: (List-like) List of strings to predict sentiment
@@ -351,9 +363,14 @@ class SentimentAnalyzer:
             Saves the model to disk
             :param filename: (String) Path to file
             """
-            parameters = {'vocab_size': self.vocab_size,
-                          'max_iter': self. max_iter}
-            with open(filename + '/bow_params.json', 'w+') as outfile:
+            parameters = {'type': self.type,
+                          'vocab_size': self.vocab_size,
+                          'max_iter': self. max_iter,
+                          'validation_split': self.validation_split,
+                          'accuracy': self.accuracy}
+
+            os.makedirs(filename, exist_ok=True)
+            with open(filename + '/bow_param.json', 'w+') as outfile:
                 json.dump(parameters, outfile)
             with open(filename + '/bow_vectorizer.pkl', 'wb+') as outfile:
                 pkl.dump(self.vectorizer, outfile)
@@ -362,6 +379,7 @@ class SentimentAnalyzer:
 
         def load_model(self, filename):
             """
+            # TODO revise to properly close pkl files
             :param filename: (String) Path to file
             """
 
@@ -370,8 +388,9 @@ class SentimentAnalyzer:
 
     class GloVE_Model:
 
-        def __init__(self, glove_index, max_length=25, vocab_size=1000000, max_iter=100, batch_size=10000, neurons=100,
-                     dropout=0.2, rec_dropout=0.2, activ='hard_sigmoid', optimizer='adam', **kwargs):
+        def __init__(self, glove_index, max_length=25, vocab_size=1000000, batch_size=10000, neurons=100,
+                     dropout=0.2, bootstrap=1, early_stopping=True, validation_split=0.2, patience=50, max_iter=250,
+                     rec_dropout=0.2, activ='hard_sigmoid', optimizer='adam', accuracy=0, **kwargs):
             """
             Constructor for LSTM classifier using pre-trained embeddings
             Be sure to add extra parameters to export()
@@ -386,6 +405,12 @@ class SentimentAnalyzer:
             """
             # TODO infer embed_vec_len from glove_index
 
+            self.bootstrap = bootstrap
+            self.early_stopping = early_stopping
+            self.validation_split = validation_split
+            self.patience = patience
+            self.max_iter = max_iter
+
             self.max_length = max_length
             self.glove_index = glove_index
             self.max_iter = max_iter
@@ -397,15 +422,17 @@ class SentimentAnalyzer:
             self.optimizer = optimizer
             self.batch_size = batch_size
 
+            self.type = 'glove'
             self.embed_vec_len = None
             self.tokenizer = None
             self.classifier = None
             self.word_index = None
             self.embedding_matrix = None
+            self.accuracy = accuracy
 
             self.embed_vec_len = len(list(self.glove_index.values())[0])
 
-        def fit(self, train_data, y, early_stopping=True, validation_split=0.1, patience=50, **kwargs):
+        def fit(self, train_data, y, **kwargs):
             """
             :param train_data: (Dataframe) Training data
             :param y: (vector) Targets
@@ -419,11 +446,17 @@ class SentimentAnalyzer:
             # Preprocess and tokenize text
             """
 
+            if self.bootstrap > 1:
+                train_data, y = resample(train_data, y, n_samples=self.bootstrap, stratify=y)
+            elif self.bootstrap < 1:
+                n_samples = int(self.bootstrap * len(y))
+                train_data, y = resample(train_data, y, n_samples=n_samples, stratify=y)
+
             filtered_data = tokenizer_filter(train_data, remove_punctuation=False, remove_stopwords=False,
                                              lemmatize=True)
             cleaned_data = [' '.join(tweet) for tweet in filtered_data]
-            self.tokenizer = Tokenizer(num_words=self.vocab_size)
 
+            self.tokenizer = Tokenizer(num_words=self.vocab_size)
             self.tokenizer.fit_on_texts(cleaned_data)
             train_sequences = self.tokenizer.texts_to_sequences(cleaned_data)
 
@@ -431,6 +464,8 @@ class SentimentAnalyzer:
             print('Found %s unique tokens.' % len(self.word_index))
 
             X = pad_sequences(train_sequences, maxlen=self.max_length, padding='pre')
+
+
 
             self.embedding_matrix = np.zeros((len(self.word_index) + 1, self.embed_vec_len))
             for word, i in self.word_index.items():
@@ -472,13 +507,16 @@ class SentimentAnalyzer:
             print(self.classifier.summary())
 
             es = []
-            if early_stopping:
-                es.append(keras.callbacks.EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=patience))
-            self.classifier.fit(X, y, validation_split=validation_split, batch_size=self.batch_size, epochs=self.max_iter,
+            if self.early_stopping:
+                es.append(keras.callbacks.EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=self.patience))
+            print('Fitting GloVE model')
+            history = self.classifier.fit(X, y, validation_split=self.validation_split, batch_size=self.batch_size, epochs=self.max_iter,
                                 callbacks=es, verbose=1)
 
-        def refine(self, train_data, y, max_iters=500, early_stopping=True, validation_split=0.1,
-                                     patience=50):
+            self.accuracy = np.max(history.history['val_acc'])
+            return history
+
+        def refine(self, train_data, y):
             """
             Train model further
             :param train_data:
@@ -501,12 +539,17 @@ class SentimentAnalyzer:
 
             es = []
             if early_stopping:
-                es.append(keras.callbacks.EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=patience))
+                es.append(keras.callbacks.EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=self.patience))
 
-            self.classifier.fit(X, y, validation_split=validation_split, callbacks=es, batch_size=self.batch_size,
-                                epochs=max_iters, verbose=1)
+            history = self.classifier.fit(X, y, validation_split=self.validation_split, callbacks=es, batch_size=self.batch_size,
+                                epochs=self.max_iters, verbose=1)
+            self.accuracy = np.max(history.history['val_acc'])
+            return history
 
         def predict(self, data):
+            return np.round(self.predict_proba(data))
+
+        def predict_proba(self, data):
             from keras.preprocessing.sequence import pad_sequences
             if self.tokenizer is None:
                 raise ValueError('Model has not been trained!')
@@ -515,13 +558,16 @@ class SentimentAnalyzer:
             X = pad_sequences(self.tokenizer.texts_to_sequences(cleaned_data), maxlen=self.max_length)
             return self.classifier.predict(X)
 
+
+
         def export(self, filename):
             """
             Saves the model to disk
             :param filename: (String) Path to file
             """
 
-            parameters = {'max_length': self.max_length,
+            parameters = {'type': self.type,
+                          'max_length': self.max_length,
                           'neurons': self.neurons,
                           'dropout': self.dropout,
                           'rec_dropout': self.rec_dropout,
@@ -529,10 +575,18 @@ class SentimentAnalyzer:
                           'optimizer': self.optimizer,
                           'vocab_size': self.vocab_size,
                           'max_iter': self.max_iter,
-                          'batch_size': self.batch_size}
+                          'batch_size': self.batch_size,
+                          'early_stopping': self.early_stopping,
+                          'patience': self.patience,
+                          'bootstrop': self.bootstrap,
+                          'validation_split': self.validation_split,
+                          'accuracy': self.accuracy}
 
+            os.makedirs(filename, exist_ok=True)
             with open(filename + '/glove_param.json', 'w+') as outfile:
                 json.dump(parameters, outfile)
+            with open(filename + '/glove_index.pkl', 'wb+') as outfile:
+                pkl.dump(self.glove_index, outfile)
             with open(filename + '/glove_tokenizer.pkl', 'wb+') as outfile:
                 pkl.dump(self.tokenizer, outfile)
             model_json = self.classifier.to_json()
@@ -552,8 +606,10 @@ class SentimentAnalyzer:
 
     class LSTM_Model:
 
-        def __init__(self, max_length=25, vocab_size=1000000, max_iter=25, neurons=50,
-                     dropout=0.25, rec_dropout=0.25, activ='hard_sigmoid', optimizer='adam', batch_size=10000, **kwargs):
+        def __init__(self, max_length=25, vocab_size=1000000, neurons=50,
+                     dropout=0.25, rec_dropout=0.25, embed_vec_len=200, activ='hard_sigmoid', optimizer='adam',
+                     bootstrap=1, early_stopping=True, patience=50, validation_split=0.2, max_iter = 250, batch_size=10000,
+                     accuracy=0, **kwargs):
             """
             Constructor for LSTM classifier using pre-trained embeddings
             Be sure to add additional parametesr to export()
@@ -567,6 +623,12 @@ class SentimentAnalyzer:
             """
             # TODO infer embed_vec_len from glove_index
 
+            self.bootstrap = bootstrap
+            self.early_stopping = early_stopping
+            self.validation_split = validation_split
+            self.patience = patience
+            self.max_iter = max_iter
+
             self.max_length = max_length
             self.max_iter = max_iter
             self.batch_size = batch_size
@@ -576,13 +638,14 @@ class SentimentAnalyzer:
             self.rec_dropout = rec_dropout
             self.activ = activ
             self.optimizer = optimizer
+            self.embed_vec_len = embed_vec_len
 
-            self.embed_vec_len = 200
-
+            self.type = 'lstm'
             self.vectorizer = None
             self.classifier = None
             self.word_index = None
             self.embedding_matrix = None
+            self.accuracy = accuracy
 
         def fit(self, train_data, y, early_stopping=True, validation_split=0.1, patience=50, **kwargs):
             """
@@ -598,6 +661,12 @@ class SentimentAnalyzer:
             # Preprocess and tokenize text
             """
 
+            if self.bootstrap > 1:
+                train_data, y = resample(train_data, y, n_samples=self.bootstrap, stratify=y)
+            elif self.bootstrap < 1:
+                n_samples = int(self.bootstrap * len(y))
+                train_data, y = resample(train_data, y, n_samples=n_samples, stratify=y)
+
             filtered_data = tokenizer_filter(train_data, remove_punctuation=False, remove_stopwords=False,
                                              lemmatize=True)
             cleaned_data = [' '.join(tweet) for tweet in filtered_data]
@@ -610,6 +679,8 @@ class SentimentAnalyzer:
             print('Found %s unique tokens.' % len(self.word_index))
 
             X = pad_sequences(train_sequences, maxlen=self.max_length, padding='pre')
+
+
 
             neurons = self.neurons  # Depth (NOT LENGTH) of LSTM network
             dropout = self.dropout  # Dropout - around 0.25 is probably best
@@ -624,8 +695,6 @@ class SentimentAnalyzer:
             print("Creating LSTM model")
             init = keras.initializers.glorot_uniform(seed=1)
             optimizer = self.optimizer
-
-            # TODO input_dim is kludged - should be able to trim embedding matrix in embed_glove.py
 
             self.classifier = keras.models.Sequential()
 
@@ -642,15 +711,20 @@ class SentimentAnalyzer:
             self.classifier.compile(loss=costfunction, optimizer=optimizer, metrics=['acc'])
             print(self.classifier.summary())
             es = []
-            if early_stopping:
-                es.append(keras.callbacks.EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=patience))
+            if self.early_stopping:
+                es.append(keras.callbacks.EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=self.patience))
 
-            self.classifier.fit(X, y, validation_split=validation_split, callbacks=es, batch_size=self.batch_size, epochs=self.max_iter, verbose=1)
 
-        def refine(self, train_data, y, max_iters=500, early_stopping=True, validation_split=0.1, patience=50):
+            print('Fitting LSTM model')
+            history = self.classifier.fit(X, y, validation_split=self.validation_split, callbacks=es, batch_size=self.batch_size,
+                                epochs=self.max_iter, verbose=1)
+            self.accuracy = np.max(history.history['val_acc'])
+            return history
+
+        def refine(self, train_data, y):
             """
             Train model further
-            :param train_data:
+            :param train_data:1
             :param y:
             :param max_iter:
             :param vocab_size:
@@ -672,10 +746,15 @@ class SentimentAnalyzer:
             if early_stopping:
                 es.append(keras.callbacks.EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=patience))
 
-            self.classifier.fit(X, y, validation_split=validation_split, callbacks=es, batch_size=self.batch_size,
+            history = self.classifier.fit(X, y, validation_split=validation_split, callbacks=es, batch_size=self.batch_size,
                                 epochs=max_iters, verbose=1)
+            self.accuracy = np.max(history.history['val_acc'])
+            return history
 
         def predict(self, data):
+            return np.round(self.predict_proba(data))
+
+        def predict_proba(self, data):
             from keras.preprocessing.sequence import pad_sequences
             if self.tokenizer is None:
                 raise ValueError('Model has not been trained!')
@@ -689,7 +768,14 @@ class SentimentAnalyzer:
             Saves the model to disk
             :param filename: (String) Path to file
             """
-            parameters = {'max_length': self.max_length,
+
+            parameters = {'type': self.type,
+                          'bootstrap': self.bootstrap,
+                          'early_stopping': self.early_stopping,
+                          'validation_split': self.validation_split,
+                          'patience': self.patience,
+                          'max_iter': self.max_iter,
+                          'max_length': self.max_length,
                           'neurons': self.neurons,
                           'dropout': self.dropout,
                           'rec_dropout': self.rec_dropout,
@@ -697,8 +783,9 @@ class SentimentAnalyzer:
                           'optimizer': self.optimizer,
                           'vocab_size': self.vocab_size,
                           'max_iter': self.max_iter,
-                          'batch_size':self.batch_size}
-
+                          'batch_size':self.batch_size,
+                          'accuracy': self.accuracy}
+            os.makedirs(filename, exist_ok=True)
             with open(filename + '/lstm_param.json', 'w+') as outfile:
                 json.dump(parameters, outfile)
 

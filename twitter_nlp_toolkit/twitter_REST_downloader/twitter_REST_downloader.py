@@ -2,10 +2,10 @@ import tweepy
 import csv
 
 class bulk_downloader:
-    def __init__(self,consumer_key,consumer_secret,access_key,access_secret):
+    def __init__(self,consumer_key,consumer_secret,access_token,access_secret):
         self.consumer_key = consumer_key
         self.consumer_secret = consumer_secret
-        self.access_key = access_key
+        self.access_key = access_token
         self.access_secret = access_secret
 
     def get_tweets_csv_for_this_user(self,screen_name,output_file_name):
