@@ -129,9 +129,9 @@ class SentimentAnalyzer:
 
     def trim_models(self, testX, testY, threshold=0.7, metric=accuracy_score, models=[]):
         if len(models) == 0:
-            models = self.models.keys()
+            models = self.models.copy().keys()
         for name in models:
-            score = metric(testY, model.predict(testX))
+            score = metric(testY, self.models[name].predict(testX))
             print('Model %s score: %0.3f' % (name, score))
             if score < threshold:
                 print('Deleting model %s' % name)
@@ -143,6 +143,8 @@ class SentimentAnalyzer:
         the tokenizers
         :param X: (array) Feature matrix
         :param y: (vector) Targets
+        :param models: (list of Strings) Names of models to fit. Default: all. Note that default behavior will likely
+        cause an error if additional models have been added after fitting a pre-trained embedding model
         :return:
         """
         if len(models) == 0:
@@ -187,41 +189,26 @@ class SentimentAnalyzer:
     def save_models(self):
         """
         Write models to disk for re-use
-        # TODO implement with proper filenames
-        :param filename: (String) Name of folder to save files in
         """
 
         for name, model in self.models.items():
             model.export(name)
             print('Model %s saved' % name)
 
-        """
-        if self.bow_param is not None:
-            self.BoW_classifier.export(filename)
-            print('BoW model saved')
-        if self.lstm_param is not None:
-            self.LSTM_classifier.export(filename)
-            print('LSTM model saved')
-        if self.glove_param is not None:
-            if save_index:
-                with open(filename + '/glove_index.pkl', 'wb+') as outfile:
-                    pkl.dump(self.glove_index, outfile)
-            self.LSTM_GloVE_classifier.export(filename)
-            print('Pre-trained embedding model saved')
-
-        """
-
     def load_models(self, filenames):
         """
         Reloads a saved model from the disk
-        # TODO this is ugly, clean it up
         :param filenames: (list) List of model names to import
         """
         for filename in filenames:
             self.load_model(filename)
 
     def load_model(self, filename):
-
+        """
+        # TODO this is ugly, consider reworking
+        :param filename:
+        :return:
+        """
         if os.path.exists(filename + '/bow_param.json'):
             try:
                 with open(filename + '/bow_param.json', 'r') as infile:
@@ -247,15 +234,15 @@ class SentimentAnalyzer:
                 print('No LSTM model found')
             except IOError:
                 print('Problem reading LSTM files')
+
         elif os.path.exists(filename + '/glove_param.json'):
             try:
                 glove_param = json.load(open(filename + '/glove_param.json', 'r'))
-                glove_index = pkl.load(open(filename + '/glove_index.pkl', 'rb'))
-                self.models[filename] = self.GloVE_Model(glove_index, **glove_param)
+                self.models[filename] = self.GloVE_Model(None, **glove_param)
                 self.models[filename].load_model(filename)
                 self.models[filename].classifier.compile(loss='binary_crossentropy',
-                                                              optimizer=self.models[filename].optimizer,
-                                                              metrics=['acc'])
+                                                         optimizer=self.models[filename].optimizer,
+                                                         metrics=['acc'])
                 print('Pre-trained embedding model loaded successfully')
             except FileNotFoundError:
                 print('No pre-trained embedding model found')
@@ -263,7 +250,6 @@ class SentimentAnalyzer:
                 print('Problem reading pre-trained embedding model files')
         else:
             print('Model %s not found' % filename)
-
 
     def evaluate(self, X, y, metric=accuracy_score):
         """
@@ -273,8 +259,7 @@ class SentimentAnalyzer:
         :param metric: (method) Metric to use
         """
 
-        scores = {}
-        scores['ensembled'] = metric(y, self.predict(X))
+        scores = {'ensembled': metric(y, self.predict(X))}
         for name, model in self.models.items():
             scores[name] = metric(y, model.predict(X))
             print('Model %s score: %0.3f' % (name, scores[name]))
@@ -325,12 +310,12 @@ class SentimentAnalyzer:
             self.classifier = LogisticRegression(random_state=0, max_iter=self.max_iter).fit(trainX, trainY)
             self.accuracy = accuracy_score(testY, self.classifier.predict(testX))
 
-        def refine(self, train_data, y, max_iters=500, early_stopping=True, validation_split=0.1,
-                                     patience=25):
+        def refine(self, train_data, y, max_iters=500):
             """
-            Train the models further
-            :param train_data: (List-like) List of strings to train on
+            Train the models further on new data. Note that it is not possible to increase the vocabulary
+            :param train_data: (List-like of Strings) List of strings to train on
             :param y: (vector) Targets
+            :param max_iters: (int) Maximum number of fit iterations. Default: 500
             """
 
             filtered_data = tokenizer_filter(train_data, remove_punctuation=True, remove_stopwords=True, lemmatize=True)
@@ -338,7 +323,6 @@ class SentimentAnalyzer:
             cleaned_data = [' '.join(tweet) for tweet in filtered_data]
             X = self.vectorizer.transform(cleaned_data)
             self.classifier = LogisticRegression(random_state=0, max_iter=max_iters).fit(X, y)
-
 
             self.classifier.fit(X, y)
 
@@ -365,7 +349,7 @@ class SentimentAnalyzer:
             """
             parameters = {'type': self.type,
                           'vocab_size': self.vocab_size,
-                          'max_iter': self. max_iter,
+                          'max_iter': self.max_iter,
                           'validation_split': self.validation_split,
                           'accuracy': self.accuracy}
 
@@ -388,13 +372,13 @@ class SentimentAnalyzer:
 
     class GloVE_Model:
 
-        def __init__(self, glove_index, max_length=25, vocab_size=1000000, batch_size=10000, neurons=100,
+        def __init__(self, embedding_dict, max_length=25, vocab_size=1000000, batch_size=10000, neurons=100,
                      dropout=0.2, bootstrap=1, early_stopping=True, validation_split=0.2, patience=50, max_iter=250,
                      rec_dropout=0.2, activ='hard_sigmoid', optimizer='adam', accuracy=0, **kwargs):
             """
             Constructor for LSTM classifier using pre-trained embeddings
             Be sure to add extra parameters to export()
-            :param glove_index: (dict) Embedding dictionary
+            :param embedding_dict: (dict) Embedding dictionary
             :param max_length: (int) Maximum text length, ie, number of temporal nodes. Default 25
             :param vocab_size: (int) Maximum vocabulary size. Default 1E7
             :param max_iter: (int) Number of training epochs. Default 100
@@ -402,9 +386,10 @@ class SentimentAnalyzer:
             :param dropout: (float) Dropout
             :param activ: (String) Activation function (for visible layer). Default 'hard_sigmoid'
             :param optimizer: (String) Optimizer. Default 'adam'
+            :param early_stopping: (bool) Train with early stopping
+            :param validation_split: (float) Fraction of training data to withold for validation
+            :param patience: (int) Number of epochs to wait before early stopping
             """
-            # TODO infer embed_vec_len from glove_index
-
             self.bootstrap = bootstrap
             self.early_stopping = early_stopping
             self.validation_split = validation_split
@@ -412,7 +397,7 @@ class SentimentAnalyzer:
             self.max_iter = max_iter
 
             self.max_length = max_length
-            self.glove_index = glove_index
+            self.embedding_dict = embedding_dict
             self.max_iter = max_iter
             self.vocab_size = vocab_size
             self.neurons = neurons
@@ -430,15 +415,15 @@ class SentimentAnalyzer:
             self.embedding_matrix = None
             self.accuracy = accuracy
 
-            self.embed_vec_len = len(list(self.glove_index.values())[0])
+            if self.embedding_dict is not None:
+                self.embed_vec_len = len(list(self.embedding_dict.values())[0])
 
-        def fit(self, train_data, y, **kwargs):
+        def fit(self, train_data, y, clear_embedding_dict=True, **kwargs):
             """
             :param train_data: (Dataframe) Training data
             :param y: (vector) Targets
-            :param early_stopping: (bool) Train with early stopping
-            :param validation_split: (float) Fraction of training data to withold for validation
-            :param patience: (int) Number of epochs to wait before early stopping
+            :param clear_embedding_dict: (Bool) Clear the embedding dictionary after building the neural network to save
+            memory. Recommended, but note that the model will need to be build from scratch to refit (not refine)
             :return:
             """
 
@@ -465,11 +450,9 @@ class SentimentAnalyzer:
 
             X = pad_sequences(train_sequences, maxlen=self.max_length, padding='pre')
 
-
-
             self.embedding_matrix = np.zeros((len(self.word_index) + 1, self.embed_vec_len))
             for word, i in self.word_index.items():
-                embedding_vector = self.glove_index.get(word)
+                embedding_vector = self.embedding_dict.get(word)
                 if embedding_vector is not None:
                     # words not found in embedding index will be all-zeros.
                     self.embedding_matrix[i] = embedding_vector
@@ -506,12 +489,18 @@ class SentimentAnalyzer:
             self.classifier.compile(loss=costfunction, optimizer=optimizer, metrics=['acc'])
             print(self.classifier.summary())
 
+            if clear_embedding_dict:
+                self.embedding_matrix = None
+                self.embedding_dict = None
+
             es = []
             if self.early_stopping:
-                es.append(keras.callbacks.EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=self.patience))
+                es.append(
+                    keras.callbacks.EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=self.patience))
             print('Fitting GloVE model')
-            history = self.classifier.fit(X, y, validation_split=self.validation_split, batch_size=self.batch_size, epochs=self.max_iter,
-                                callbacks=es, verbose=1)
+            history = self.classifier.fit(X, y, validation_split=self.validation_split, batch_size=self.batch_size,
+                                          epochs=self.max_iter,
+                                          callbacks=es, verbose=1)
 
             self.accuracy = np.max(history.history['val_acc'])
             return history
@@ -539,10 +528,12 @@ class SentimentAnalyzer:
 
             es = []
             if early_stopping:
-                es.append(keras.callbacks.EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=self.patience))
+                es.append(
+                    keras.callbacks.EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=self.patience))
 
-            history = self.classifier.fit(X, y, validation_split=self.validation_split, callbacks=es, batch_size=self.batch_size,
-                                epochs=self.max_iters, verbose=1)
+            history = self.classifier.fit(X, y, validation_split=self.validation_split, callbacks=es,
+                                          batch_size=self.batch_size,
+                                          epochs=self.max_iters, verbose=1)
             self.accuracy = np.max(history.history['val_acc'])
             return history
 
@@ -557,8 +548,6 @@ class SentimentAnalyzer:
             cleaned_data = [' '.join(tweet) for tweet in filtered_data]
             X = pad_sequences(self.tokenizer.texts_to_sequences(cleaned_data), maxlen=self.max_length)
             return self.classifier.predict(X)
-
-
 
         def export(self, filename):
             """
@@ -585,8 +574,6 @@ class SentimentAnalyzer:
             os.makedirs(filename, exist_ok=True)
             with open(filename + '/glove_param.json', 'w+') as outfile:
                 json.dump(parameters, outfile)
-            with open(filename + '/glove_index.pkl', 'wb+') as outfile:
-                pkl.dump(self.glove_index, outfile)
             with open(filename + '/glove_tokenizer.pkl', 'wb+') as outfile:
                 pkl.dump(self.tokenizer, outfile)
             model_json = self.classifier.to_json()
@@ -608,7 +595,8 @@ class SentimentAnalyzer:
 
         def __init__(self, max_length=25, vocab_size=1000000, neurons=50,
                      dropout=0.25, rec_dropout=0.25, embed_vec_len=200, activ='hard_sigmoid', optimizer='adam',
-                     bootstrap=1, early_stopping=True, patience=50, validation_split=0.2, max_iter = 250, batch_size=10000,
+                     bootstrap=1, early_stopping=True, patience=50, validation_split=0.2, max_iter=250,
+                     batch_size=10000,
                      accuracy=0, **kwargs):
             """
             Constructor for LSTM classifier using pre-trained embeddings
@@ -621,7 +609,6 @@ class SentimentAnalyzer:
             :param activ: (String) Activation function (for visible layer). Default 'hard_sigmoid'
             :param optimizer: (String) Optimizer. Default 'adam'
             """
-            # TODO infer embed_vec_len from glove_index
 
             self.bootstrap = bootstrap
             self.early_stopping = early_stopping
@@ -647,7 +634,7 @@ class SentimentAnalyzer:
             self.embedding_matrix = None
             self.accuracy = accuracy
 
-        def fit(self, train_data, y, early_stopping=True, validation_split=0.1, patience=50, **kwargs):
+        def fit(self, train_data, y, **kwargs):
             """
             :param train_data:
             :param y:
@@ -680,8 +667,6 @@ class SentimentAnalyzer:
 
             X = pad_sequences(train_sequences, maxlen=self.max_length, padding='pre')
 
-
-
             neurons = self.neurons  # Depth (NOT LENGTH) of LSTM network
             dropout = self.dropout  # Dropout - around 0.25 is probably best
             rec_dropout = self.rec_dropout
@@ -702,7 +687,8 @@ class SentimentAnalyzer:
                                                                   output_dim=self.embed_vec_len,
                                                                   input_length=self.max_length,
                                                                   mask_zero=True,
-                                                                  embeddings_initializer=keras.initializers.glorot_normal(seed=None)))
+                                                                  embeddings_initializer=keras.initializers.glorot_normal(
+                                                                      seed=None)))
             self.classifier.add(keras.layers.SpatialDropout1D(dropout))
             self.classifier.add(keras.layers.LSTM(units=neurons, input_shape=(self.max_length, self.embed_vec_len),
                                                   kernel_initializer=init, dropout=dropout,
@@ -712,12 +698,13 @@ class SentimentAnalyzer:
             print(self.classifier.summary())
             es = []
             if self.early_stopping:
-                es.append(keras.callbacks.EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=self.patience))
-
+                es.append(
+                    keras.callbacks.EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=self.patience))
 
             print('Fitting LSTM model')
-            history = self.classifier.fit(X, y, validation_split=self.validation_split, callbacks=es, batch_size=self.batch_size,
-                                epochs=self.max_iter, verbose=1)
+            history = self.classifier.fit(X, y, validation_split=self.validation_split, callbacks=es,
+                                          batch_size=self.batch_size,
+                                          epochs=self.max_iter, verbose=1)
             self.accuracy = np.max(history.history['val_acc'])
             return history
 
@@ -746,8 +733,9 @@ class SentimentAnalyzer:
             if early_stopping:
                 es.append(keras.callbacks.EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=patience))
 
-            history = self.classifier.fit(X, y, validation_split=validation_split, callbacks=es, batch_size=self.batch_size,
-                                epochs=max_iters, verbose=1)
+            history = self.classifier.fit(X, y, validation_split=validation_split, callbacks=es,
+                                          batch_size=self.batch_size,
+                                          epochs=max_iters, verbose=1)
             self.accuracy = np.max(history.history['val_acc'])
             return history
 
@@ -782,8 +770,7 @@ class SentimentAnalyzer:
                           'activ': self.activ,
                           'optimizer': self.optimizer,
                           'vocab_size': self.vocab_size,
-                          'max_iter': self.max_iter,
-                          'batch_size':self.batch_size,
+                          'batch_size': self.batch_size,
                           'accuracy': self.accuracy}
             os.makedirs(filename, exist_ok=True)
             with open(filename + '/lstm_param.json', 'w+') as outfile:
