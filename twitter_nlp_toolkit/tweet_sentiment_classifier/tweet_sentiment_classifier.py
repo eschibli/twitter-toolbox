@@ -74,13 +74,14 @@ def tokenizer_filter(text, remove_punctuation=True, remove_stopwords=True, lemma
 
 
 class SentimentAnalyzer:
-    def __init__(self, models=[]):
+    def __init__(self, models=[], model_path='Models'):
         """
         Constructor for SentimentAnalyzer module
         :param models: (list) Models to initialize. Should be a list of tuples formatted like (name, type, params)
         type can be 'bow', 'lstm', or 'glove', and params is a dictionary of parameters
         """
         self.models = {}
+        self.model_path = model_path
 
         for name, type, params in models:
             if type == 'bow':
@@ -91,6 +92,10 @@ class SentimentAnalyzer:
                 self.add_glove_model(name, **params)
             else:
                 print('Model type %s not recognized' % type)
+
+
+    def set_model_path(self, model_path):
+        self.model_path = model_path
 
     def add_bow_model(self, name, **kwargs):
         """
@@ -157,16 +162,17 @@ class SentimentAnalyzer:
             except KeyError:
                 print('Model %s not found!' % name)
 
-    def refine(self, X, y, **kwargs):
+    def refine(self, X, y, bootstrap=True, **kwargs):
         """
         Refits the trained models onto additional data. Not that this does NOT retrain the tokenizers, so it will not
         retrain the vocabulary
         :param X: (array) Feature matrix
         :param y: (vector) Targets
+        :param boostrap: (bool) Bootstrap sample the refining data. Default True.
         """
 
         for model in self.models.values():
-            model.refine(X, y, **kwargs)
+            model.refine(X, y, bootstrap=bootstrap, **kwargs)
 
     def predict(self, X):
         """
@@ -192,16 +198,31 @@ class SentimentAnalyzer:
         """
 
         for name, model in self.models.items():
-            model.export(name)
+            model.export(self.model_path + '/' + name)
             print('Model %s saved' % name)
 
-    def load_models(self, filenames):
+    def load_models(self, filenames=None, path=None):
         """
         Reloads a saved model from the disk
         :param filenames: (list) List of model names to import
+        :param path: (String) Directory to load from
         """
-        for filename in filenames:
-            self.load_model(filename)
+        if path is None:
+            path = self.model_path
+
+        if filenames is not None:
+            for filename in filenames:
+                self.load_model(self.model_path + '/' + filename)
+
+        if filenames is None:
+            filenames = [folder.path for folder in os.scandir(path) if folder.is_dir()]
+            for filename in filenames:
+                self.load_model(filename)
+
+
+
+
+
 
     def load_model(self, filename):
         """
@@ -292,7 +313,7 @@ class SentimentAnalyzer:
             :param y: (vector) Targets
             """
 
-            if self.bootstrap > 1:
+            if self.bootstrap > 1 and self.bootstrap > len(y):
                 train_data, y = resample(train_data, y, n_samples=self.bootstrap, stratify=y)
             elif self.bootstrap < 1:
                 n_samples = int(self.bootstrap * len(y))
@@ -310,19 +331,24 @@ class SentimentAnalyzer:
             self.classifier = LogisticRegression(random_state=0, max_iter=self.max_iter).fit(trainX, trainY)
             self.accuracy = accuracy_score(testY, self.classifier.predict(testX))
 
-        def refine(self, train_data, y, max_iters=500):
+        def refine(self, train_data, y, bootstrap=True, max_iter=500):
             """
             Train the models further on new data. Note that it is not possible to increase the vocabulary
             :param train_data: (List-like of Strings) List of strings to train on
             :param y: (vector) Targets
-            :param max_iters: (int) Maximum number of fit iterations. Default: 500
+            :param max_iter: (int) Maximum number of fit iterations. Default: 500
             """
+            if bootstrap and self.bootstrap > 1 and self.bootstrap > len(y):
+                train_data, y = resample(train_data, y, n_samples=self.bootstrap, stratify=y)
+            elif bootstrap and self.bootstrap < 1:
+                n_samples = int(self.bootstrap * len(y))
+                train_data, y = utils.resample(train_data, y, n_samples=n_samples, stratify=y)
 
             filtered_data = tokenizer_filter(train_data, remove_punctuation=True, remove_stopwords=True, lemmatize=True)
 
             cleaned_data = [' '.join(tweet) for tweet in filtered_data]
             X = self.vectorizer.transform(cleaned_data)
-            self.classifier = LogisticRegression(random_state=0, max_iter=max_iters).fit(X, y)
+            self.classifier = LogisticRegression(random_state=0, max_iter=max_iter).fit(X, y)
 
             self.classifier.fit(X, y)
 
@@ -431,7 +457,7 @@ class SentimentAnalyzer:
             # Preprocess and tokenize text
             """
 
-            if self.bootstrap > 1:
+            if self.bootstrap > 1 and self.bootstrap > len(y):
                 train_data, y = resample(train_data, y, n_samples=self.bootstrap, stratify=y)
             elif self.bootstrap < 1:
                 n_samples = int(self.bootstrap * len(y))
@@ -505,19 +531,23 @@ class SentimentAnalyzer:
             self.accuracy = np.max(history.history['val_acc'])
             return history
 
-        def refine(self, train_data, y):
+        def refine(self, train_data, y, bootstrap=True):
             """
             Train model further
             :param train_data:
             :param y:
-            :param max_iter:
-            :param vocab_size:
+            :param bootstrap: (bool) Bootstrap sample the refining data. Default True
             :return:
             """
 
             """
             # Preprocess and tokenize text
             """
+            if bootstrap and self.bootstrap > 1 and self.bootstrap > len(y):
+                train_data, y = resample(train_data, y, n_samples=self.bootstrap, stratify=y)
+            elif bootstrap and self.bootstrap < 1:
+                n_samples = int(self.bootstrap * len(y))
+                train_data, y = utils.resample(train_data, y, n_samples=n_samples, stratify=y)
 
             filtered_data = tokenizer_filter(train_data, remove_punctuation=False, remove_stopwords=False,
                                              lemmatize=True)
@@ -527,13 +557,13 @@ class SentimentAnalyzer:
             X = pad_sequences(train_sequences, maxlen=self.max_length, padding='pre')
 
             es = []
-            if early_stopping:
+            if self.early_stopping:
                 es.append(
                     keras.callbacks.EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=self.patience))
 
             history = self.classifier.fit(X, y, validation_split=self.validation_split, callbacks=es,
                                           batch_size=self.batch_size,
-                                          epochs=self.max_iters, verbose=1)
+                                          epochs=self.max_iter, verbose=1)
             self.accuracy = np.max(history.history['val_acc'])
             return history
 
@@ -648,7 +678,7 @@ class SentimentAnalyzer:
             # Preprocess and tokenize text
             """
 
-            if self.bootstrap > 1:
+            if self.bootstrap > 1 and self.bootstrap > len(y):
                 train_data, y = resample(train_data, y, n_samples=self.bootstrap, stratify=y)
             elif self.bootstrap < 1:
                 n_samples = int(self.bootstrap * len(y))
@@ -708,7 +738,7 @@ class SentimentAnalyzer:
             self.accuracy = np.max(history.history['val_acc'])
             return history
 
-        def refine(self, train_data, y):
+        def refine(self, train_data, y, bootstrap=True):
             """
             Train model further
             :param train_data:1
@@ -722,6 +752,12 @@ class SentimentAnalyzer:
             # Preprocess and tokenize text
             """
 
+            if bootstrap and self.bootstrap > 1 and self.bootstrap > len(y):
+                train_data, y = resample(train_data, y, n_samples=self.bootstrap, stratify=y)
+            elif bootstrap and self.bootstrap < 1:
+                n_samples = int(self.bootstrap * len(y))
+                train_data, y = resample(train_data, y, n_samples=n_samples, stratify=y)
+
             filtered_data = tokenizer_filter(train_data, remove_punctuation=False, remove_stopwords=False,
                                              lemmatize=True)
             cleaned_data = [' '.join(tweet) for tweet in filtered_data]
@@ -730,12 +766,12 @@ class SentimentAnalyzer:
             X = pad_sequences(train_sequences, maxlen=self.max_length, padding='pre')
 
             es = []
-            if early_stopping:
-                es.append(keras.callbacks.EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=patience))
+            if self.early_stopping:
+                es.append(keras.callbacks.EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=self.patience))
 
             history = self.classifier.fit(X, y, validation_split=validation_split, callbacks=es,
                                           batch_size=self.batch_size,
-                                          epochs=max_iters, verbose=1)
+                                          epochs=max_iter, verbose=1)
             self.accuracy = np.max(history.history['val_acc'])
             return history
 
