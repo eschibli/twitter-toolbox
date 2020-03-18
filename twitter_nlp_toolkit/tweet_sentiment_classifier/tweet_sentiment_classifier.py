@@ -130,7 +130,7 @@ class SentimentAnalyzer:
     def trim_models(self, testX, testY, threshold=0.7, metric=accuracy_score, models=[]):
         if len(models) == 0:
             models = self.models.keys()
-        for name, model in models.items():
+        for name in models:
             score = metric(testY, model.predict(testX))
             print('Model %s score: %0.3f' % (name, score))
             if score < threshold:
