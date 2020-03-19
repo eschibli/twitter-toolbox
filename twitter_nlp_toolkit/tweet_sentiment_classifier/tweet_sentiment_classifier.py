@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import spacy
 import pickle as pkl
 import json
 import os
@@ -27,7 +28,7 @@ def tokenizer_filter(text, remove_punctuation=True, remove_stopwords=True, lemma
     :param lemmatize_pronouns: (bool) lemmatize pronouns to -PRON-
     :return: (list) tokenized and processed text
     """
-
+#    spacy.prefer_gpu()
     import en_core_web_sm
 
     """
@@ -212,11 +213,12 @@ class SentimentAnalyzer:
 
         if filenames is not None:
             for filename in filenames:
-                self.load_model(self.model_path + '/' + filename)
+                self.load_model(path + '/' + filename)
 
         if filenames is None:
             filenames = [folder.path for folder in os.scandir(path) if folder.is_dir()]
             for filename in filenames:
+                print(filename)
                 self.load_model(filename)
 
 
@@ -264,7 +266,7 @@ class SentimentAnalyzer:
                 self.models[filename].classifier.compile(loss='binary_crossentropy',
                                                          optimizer=self.models[filename].optimizer,
                                                          metrics=['acc'])
-                print('Pre-trained embedding model loaded successfully')
+                print('Pre-trained embedding model %s loaded successfully' % filename)
             except FileNotFoundError:
                 print('No pre-trained embedding model found')
             except IOError:
