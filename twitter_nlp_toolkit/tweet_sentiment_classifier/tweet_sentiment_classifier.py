@@ -313,11 +313,11 @@ class SentimentAnalyzer:
             :param y: (vector) Targets
             """
 
-            if self.bootstrap > 1 and self.bootstrap > len(y):
-                train_data, y = resample(train_data, y, n_samples=self.bootstrap, stratify=y)
+            if 1 < self.bootstrap < len(y):
+                train_data, y = resample(train_data, y, n_samples=self.bootstrap, stratify=y, replace=False)
             elif self.bootstrap < 1:
                 n_samples = int(self.bootstrap * len(y))
-                train_data, y = utils.resample(train_data, y, n_samples=n_samples, stratify=y)
+                train_data, y = utils.resample(train_data, y, n_samples=n_samples, stratify=y, replace=False)
 
             filtered_data = tokenizer_filter(train_data, remove_punctuation=True, remove_stopwords=True, lemmatize=True)
 
@@ -338,11 +338,11 @@ class SentimentAnalyzer:
             :param y: (vector) Targets
             :param max_iter: (int) Maximum number of fit iterations. Default: 500
             """
-            if bootstrap and self.bootstrap > 1 and self.bootstrap > len(y):
-                train_data, y = resample(train_data, y, n_samples=self.bootstrap, stratify=y)
+            if bootstrap and 1 < self.bootstrap < len(y):
+                train_data, y = resample(train_data, y, n_samples=self.bootstrap, stratify=y, replace=False)
             elif bootstrap and self.bootstrap < 1:
                 n_samples = int(self.bootstrap * len(y))
-                train_data, y = utils.resample(train_data, y, n_samples=n_samples, stratify=y)
+                train_data, y = utils.resample(train_data, y, n_samples=n_samples, stratify=y, replace=False)
 
             filtered_data = tokenizer_filter(train_data, remove_punctuation=True, remove_stopwords=True, lemmatize=True)
 
@@ -457,14 +457,15 @@ class SentimentAnalyzer:
             # Preprocess and tokenize text
             """
 
-            if self.bootstrap > 1 and self.bootstrap > len(y):
-                train_data, y = resample(train_data, y, n_samples=self.bootstrap, stratify=y)
+            if 1 < self.bootstrap < len(y):
+                train_data, y = resample(train_data, y, n_samples=self.bootstrap, stratify=y, replace=False)
             elif self.bootstrap < 1:
                 n_samples = int(self.bootstrap * len(y))
-                train_data, y = resample(train_data, y, n_samples=n_samples, stratify=y)
-
+                train_data, y = resample(train_data, y, n_samples=n_samples, stratify=y, replace=False)
+            print('Sampled %d training points' % len(y))
             filtered_data = tokenizer_filter(train_data, remove_punctuation=False, remove_stopwords=False,
                                              lemmatize=True)
+            print('Filtered data')
             cleaned_data = [' '.join(tweet) for tweet in filtered_data]
 
             self.tokenizer = Tokenizer(num_words=self.vocab_size)
@@ -472,6 +473,7 @@ class SentimentAnalyzer:
             train_sequences = self.tokenizer.texts_to_sequences(cleaned_data)
 
             self.word_index = self.tokenizer.word_index
+            print('Tokenized data')
             print('Found %s unique tokens.' % len(self.word_index))
 
             X = pad_sequences(train_sequences, maxlen=self.max_length, padding='pre')
@@ -543,11 +545,11 @@ class SentimentAnalyzer:
             """
             # Preprocess and tokenize text
             """
-            if bootstrap and self.bootstrap > 1 and self.bootstrap > len(y):
-                train_data, y = resample(train_data, y, n_samples=self.bootstrap, stratify=y)
+            if bootstrap and 1 < self.bootstrap < len(y):
+                train_data, y = resample(train_data, y, n_samples=self.bootstrap, stratify=y, replace=False)
             elif bootstrap and self.bootstrap < 1:
                 n_samples = int(self.bootstrap * len(y))
-                train_data, y = utils.resample(train_data, y, n_samples=n_samples, stratify=y)
+                train_data, y = utils.resample(train_data, y, n_samples=n_samples, stratify=y, replace=False)
 
             filtered_data = tokenizer_filter(train_data, remove_punctuation=False, remove_stopwords=False,
                                              lemmatize=True)
@@ -678,11 +680,11 @@ class SentimentAnalyzer:
             # Preprocess and tokenize text
             """
 
-            if self.bootstrap > 1 and self.bootstrap > len(y):
-                train_data, y = resample(train_data, y, n_samples=self.bootstrap, stratify=y)
+            if 1 < self.bootstrap < len(y):
+                train_data, y = resample(train_data, y, n_samples=self.bootstrap, stratify=y, replace=False)
             elif self.bootstrap < 1:
                 n_samples = int(self.bootstrap * len(y))
-                train_data, y = resample(train_data, y, n_samples=n_samples, stratify=y)
+                train_data, y = resample(train_data, y, n_samples=n_samples, stratify=y, replace=False)
 
             filtered_data = tokenizer_filter(train_data, remove_punctuation=False, remove_stopwords=False,
                                              lemmatize=True)
@@ -752,11 +754,11 @@ class SentimentAnalyzer:
             # Preprocess and tokenize text
             """
 
-            if bootstrap and self.bootstrap > 1 and self.bootstrap > len(y):
-                train_data, y = resample(train_data, y, n_samples=self.bootstrap, stratify=y)
+            if bootstrap and 1 < self.bootstrap < len(y):
+                train_data, y = resample(train_data, y, n_samples=self.bootstrap, stratify=y, replace=False)
             elif bootstrap and self.bootstrap < 1:
                 n_samples = int(self.bootstrap * len(y))
-                train_data, y = resample(train_data, y, n_samples=n_samples, stratify=y)
+                train_data, y = resample(train_data, y, n_samples=n_samples, stratify=y, replace=False)
 
             filtered_data = tokenizer_filter(train_data, remove_punctuation=False, remove_stopwords=False,
                                              lemmatize=True)
