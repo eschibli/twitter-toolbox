@@ -28,13 +28,13 @@ def tokenizer_filter(text, remove_punctuation=True, remove_stopwords=True, lemma
     :param lemmatize_pronouns: (bool) lemmatize pronouns to -PRON-
     :return: (list) tokenized and processed text
     """
-#    spacy.prefer_gpu()
-    import en_core_web_sm
+    import spacy
+    nlp = spacy.load("en_core_web_sm")
 
     """
     Define filter
     """
-    nlp = en_core_web_sm.load()
+    nlp = spacy.load("en_core_web_sm", disable=['textcat', "parser", 'ner', 'entity_linker'])
     docs = list(text)
     filtered_tokens = []
     if remove_stopwords and remove_punctuation:
@@ -53,17 +53,21 @@ def tokenizer_filter(text, remove_punctuation=True, remove_stopwords=True, lemma
     """
     Do filtering
     """
-
+    count = 0
     if lemmatize and lemmatize_pronouns:
         for doc in nlp.pipe(docs, n_threads=-1, batch_size=10000):
             tokens = [token.lemma_.lower() for token in doc if token_filter(token)]
             filtered_tokens.append(tokens)
+            count = count + 1
+            print('Preprocessed %d tweets', end='\r')
         return filtered_tokens
     elif lemmatize:
         for doc in nlp.pipe(docs):
             # pronouns lemmatize to -PRON- which is undesirable when using pre-trained embeddings
             tokens = [token.lemma_.lower() if token.lemma_ != '-PRON-'
                       else token.lower_ for token in doc if token_filter(token)]
+            count = count + 1
+            print('Preprocessed %d tweets', end='\r')
             filtered_tokens.append(tokens)
         return filtered_tokens
     else:
@@ -71,6 +75,8 @@ def tokenizer_filter(text, remove_punctuation=True, remove_stopwords=True, lemma
         for doc in nlp.pipe(docs):
             tokens = [token.lower_ for token in doc if token_filter(token)]
             filtered_tokens.append(tokens)
+            count = count + 1
+            print('Preprocessed %d tweets', end='\r')
         return filtered_tokens
 
 
@@ -188,9 +194,13 @@ class SentimentAnalyzer:
     def predict_proba(self, X):
         predictions = []
 
-        for model in self.models.values():
-            predictions.append(model.predict_proba(X).reshape(-1))
-
+        for name, model in self.models.items():
+            try:
+                predictions.append(model.predict_proba(X).reshape(-1))
+            except ValueError:
+                print('Error using model %s - probably has not been trained' % name)
+            except:
+                print('Error using model %s' % name)
         return np.mean(predictions, axis=0)
 
     def save_models(self):
@@ -221,11 +231,6 @@ class SentimentAnalyzer:
                 print(filename)
                 self.load_model(filename)
 
-
-
-
-
-
     def load_model(self, filename):
         """
         # TODO this is ugly, consider reworking
@@ -234,6 +239,7 @@ class SentimentAnalyzer:
         """
         if os.path.exists(filename + '/bow_param.json'):
             try:
+                print('Loading BoW model %s' % filename)
                 with open(filename + '/bow_param.json', 'r') as infile:
                     bow_param = json.load(infile)
                 self.models[filename] = self.BoW_Model(**bow_param)
@@ -241,11 +247,12 @@ class SentimentAnalyzer:
                 print('BoW model %s loaded successfully' % filename)
             except FileNotFoundError:
                 print('Model %s not found' % filename)
-            except IOError:
+            except (IOError, EOFError):
                 print('Problem reading %s files' % filename)
 
         elif os.path.exists(filename + '/lstm_param.json'):
             try:
+                print('Loading LSTM model %s' % filename)
                 with open(filename + '/lstm_param.json', 'r') as infile:
                     lstm_param = json.load(infile)
                 self.models[filename] = self.LSTM_Model(**lstm_param)
@@ -254,12 +261,13 @@ class SentimentAnalyzer:
                 self.models[filename].classifier.compile(loss='binary_crossentropy',
                                                          optimizer=self.models[filename].optimizer, metrics=['acc'])
             except FileNotFoundError:
-                print('No LSTM model found')
-            except IOError:
-                print('Problem reading LSTM files')
+                print('Model %s not found' % filename)
+            except (IOError, EOFError):
+                print('Problem reading %s files' % filename)
 
         elif os.path.exists(filename + '/glove_param.json'):
             try:
+                print('Loading GloVE model %s' % filename)
                 glove_param = json.load(open(filename + '/glove_param.json', 'r'))
                 self.models[filename] = self.GloVE_Model(None, **glove_param)
                 self.models[filename].load_model(filename)
@@ -268,9 +276,9 @@ class SentimentAnalyzer:
                                                          metrics=['acc'])
                 print('Pre-trained embedding model %s loaded successfully' % filename)
             except FileNotFoundError:
-                print('No pre-trained embedding model found')
-            except IOError:
-                print('Problem reading pre-trained embedding model files')
+                print('Model %s not found' % filename)
+            except (IOError, EOFError):
+                print('Problem reading %s files' % filename)
         else:
             print('Model %s not found' % filename)
 
@@ -284,8 +292,11 @@ class SentimentAnalyzer:
 
         scores = {'ensembled': metric(y, self.predict(X))}
         for name, model in self.models.items():
-            scores[name] = metric(y, model.predict(X))
-            print('Model %s score: %0.3f' % (name, scores[name]))
+            try:
+                scores[name] = metric(y, model.predict(X))
+                print('Model %s score: %0.3f' % (name, scores[name]))
+            except ValueError:
+                print('Error, %s probably has not been trained' % name)
         return scores
 
     class BoW_Model:
@@ -347,6 +358,7 @@ class SentimentAnalyzer:
                 train_data, y = utils.resample(train_data, y, n_samples=n_samples, stratify=y, replace=False)
 
             filtered_data = tokenizer_filter(train_data, remove_punctuation=True, remove_stopwords=True, lemmatize=True)
+            print('Filtered data')
 
             cleaned_data = [' '.join(tweet) for tweet in filtered_data]
             X = self.vectorizer.transform(cleaned_data)
@@ -555,6 +567,9 @@ class SentimentAnalyzer:
 
             filtered_data = tokenizer_filter(train_data, remove_punctuation=False, remove_stopwords=False,
                                              lemmatize=True)
+
+            print('Filtered data')
+
             cleaned_data = [' '.join(tweet) for tweet in filtered_data]
             train_sequences = self.tokenizer.texts_to_sequences(cleaned_data)
 
@@ -662,7 +677,7 @@ class SentimentAnalyzer:
             self.embed_vec_len = embed_vec_len
 
             self.type = 'lstm'
-            self.vectorizer = None
+            self.tokenizer = None
             self.classifier = None
             self.word_index = None
             self.embedding_matrix = None
@@ -690,8 +705,10 @@ class SentimentAnalyzer:
 
             filtered_data = tokenizer_filter(train_data, remove_punctuation=False, remove_stopwords=False,
                                              lemmatize=True)
+
+            print('Filtered data')
             cleaned_data = [' '.join(tweet) for tweet in filtered_data]
-            self.tokenizer = Tokenizer(num_words=self.vocab_size)
+            self.tokenizer = Tokenizer(num_words=self.vocab_size, filters='"#$%&()*+-/:;<=>?@[\\]^_`{|}~\t\n')
 
             self.tokenizer.fit_on_texts(cleaned_data)
             train_sequences = self.tokenizer.texts_to_sequences(cleaned_data)
