@@ -59,7 +59,8 @@ def tokenizer_filter(text, remove_punctuation=True, remove_stopwords=True, lemma
             tokens = [token.lemma_.lower() for token in doc if token_filter(token)]
             filtered_tokens.append(tokens)
             count = count + 1
-            print('Preprocessed %d tweets', end='\r')
+            # Starting with a carriage return rather than ending with one keeps the text visible in some IDEs.
+            print('\r Preprocessed %d tweets' % count, end=' ')
         return filtered_tokens
     elif lemmatize:
         for doc in nlp.pipe(docs):
@@ -67,7 +68,8 @@ def tokenizer_filter(text, remove_punctuation=True, remove_stopwords=True, lemma
             tokens = [token.lemma_.lower() if token.lemma_ != '-PRON-'
                       else token.lower_ for token in doc if token_filter(token)]
             count = count + 1
-            print('Preprocessed %d tweets', end='\r')
+            # Starting with a carriage return rather than ending with one keeps the text visible in some IDEs.
+            print('\r Preprocessed %d tweets'% count, end=' ')
             filtered_tokens.append(tokens)
         return filtered_tokens
     else:
@@ -76,7 +78,8 @@ def tokenizer_filter(text, remove_punctuation=True, remove_stopwords=True, lemma
             tokens = [token.lower_ for token in doc if token_filter(token)]
             filtered_tokens.append(tokens)
             count = count + 1
-            print('Preprocessed %d tweets', end='\r')
+            # Starting with a carriage return rather than ending with one keeps the text visible in some IDEs.
+            print('\r Preprocessed %d tweets' % count, end=' ')
         return filtered_tokens
 
 
@@ -330,7 +333,7 @@ class SentimentAnalyzer:
                 train_data, y = resample(train_data, y, n_samples=self.bootstrap, stratify=y, replace=False)
             elif self.bootstrap < 1:
                 n_samples = int(self.bootstrap * len(y))
-                train_data, y = utils.resample(train_data, y, n_samples=n_samples, stratify=y, replace=False)
+                train_data, y = resample(train_data, y, n_samples=n_samples, stratify=y, replace=False)
 
             filtered_data = tokenizer_filter(train_data, remove_punctuation=True, remove_stopwords=True, lemmatize=True)
 
@@ -355,10 +358,10 @@ class SentimentAnalyzer:
                 train_data, y = resample(train_data, y, n_samples=self.bootstrap, stratify=y, replace=False)
             elif bootstrap and self.bootstrap < 1:
                 n_samples = int(self.bootstrap * len(y))
-                train_data, y = utils.resample(train_data, y, n_samples=n_samples, stratify=y, replace=False)
+                train_data, y = resample(train_data, y, n_samples=n_samples, stratify=y, replace=False)
 
             filtered_data = tokenizer_filter(train_data, remove_punctuation=True, remove_stopwords=True, lemmatize=True)
-            print('Filtered data')
+            print('\n Filtered data')
 
             cleaned_data = [' '.join(tweet) for tweet in filtered_data]
             X = self.vectorizer.transform(cleaned_data)
@@ -563,7 +566,7 @@ class SentimentAnalyzer:
                 train_data, y = resample(train_data, y, n_samples=self.bootstrap, stratify=y, replace=False)
             elif bootstrap and self.bootstrap < 1:
                 n_samples = int(self.bootstrap * len(y))
-                train_data, y = utils.resample(train_data, y, n_samples=n_samples, stratify=y, replace=False)
+                train_data, y = resample(train_data, y, n_samples=n_samples, stratify=y, replace=False)
 
             filtered_data = tokenizer_filter(train_data, remove_punctuation=False, remove_stopwords=False,
                                              lemmatize=True)
