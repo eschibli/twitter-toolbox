@@ -152,7 +152,7 @@ class SentimentAnalyzer:
                 print('Deleting model %s' % name)
                 del self.models[name]
 
-    def fit(self, X, y, models=[]):
+    def fit(self, X, y, models=[], weights=None):
         """
         Fits the enabled models onto X. Note that this rebuilds the models, as it is not currently possible to update
         the tokenizers
@@ -168,11 +168,11 @@ class SentimentAnalyzer:
         for name in models:
             try:
                 print('Fitting %s' % name)
-                self.models[name].fit(X, y)
+                self.models[name].fit(X, y, weights=weights)
             except KeyError:
                 print('Model %s not found!' % name)
 
-    def refine(self, X, y, bootstrap=True, **kwargs):
+    def refine(self, X, y, bootstrap=True, weights=None, **kwargs):
         """
         Refits the trained models onto additional data. Not that this does NOT retrain the tokenizers, so it will not
         retrain the vocabulary
@@ -329,12 +329,18 @@ class SentimentAnalyzer:
             self.accuracy = accuracy
             self.bootstrap = bootstrap
 
-        def fit(self, train_data, y):
+        def fit(self, train_data, y, weights=None):
             """
             Fit the model (from scratch)
             :param train_data: (List-like) List of strings to train on
             :param y: (vector) Targets
             """
+
+            if weights is not None:
+                try:
+                    y = np.hstack(y, weights)
+                except:
+                    print('Weights not accepted')
 
             if 1 < self.bootstrap < len(y):
                 train_data, y = resample(train_data, y, n_samples=self.bootstrap, stratify=y, replace=False)
@@ -354,13 +360,20 @@ class SentimentAnalyzer:
             self.classifier = LogisticRegression(random_state=0, max_iter=self.max_iter).fit(trainX, trainY)
             self.accuracy = accuracy_score(testY, self.classifier.predict(testX))
 
-        def refine(self, train_data, y, bootstrap=True, max_iter=500):
+        def refine(self, train_data, y, bootstrap=True, weights=None, max_iter=500):
             """
             Train the models further on new data. Note that it is not possible to increase the vocabulary
             :param train_data: (List-like of Strings) List of strings to train on
             :param y: (vector) Targets
             :param max_iter: (int) Maximum number of fit iterations. Default: 500
             """
+
+            if weights is not None:
+                try:
+                    y = np.hstack(y, weights)
+                except:
+                    print('Weights not accepted')
+
             if bootstrap and 1 < self.bootstrap < len(y):
                 train_data, y = resample(train_data, y, n_samples=self.bootstrap, stratify=y, replace=False)
             elif bootstrap and self.bootstrap < 1:
@@ -468,7 +481,7 @@ class SentimentAnalyzer:
             if self.embedding_dict is not None:
                 self.embed_vec_len = len(list(self.embedding_dict.values())[0])
 
-        def fit(self, train_data, y, clear_embedding_dict=True, **kwargs):
+        def fit(self, train_data, y, clear_embedding_dict=True, weights=None, **kwargs):
             """
             :param train_data: (Dataframe) Training data
             :param y: (vector) Targets
@@ -551,13 +564,13 @@ class SentimentAnalyzer:
                     keras.callbacks.EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=self.patience))
             print('Fitting GloVE model')
             history = self.classifier.fit(X, y, validation_split=self.validation_split, batch_size=self.batch_size,
-                                          epochs=self.max_iter,
+                                          epochs=self.max_iter, sample_weight=weights,
                                           callbacks=es, verbose=1)
 
             self.accuracy = np.max(history.history['val_acc'])
             return history
 
-        def refine(self, train_data, y, bootstrap=True):
+        def refine(self, train_data, y, bootstrap=True, weights=None):
             """
             Train model further
             :param train_data:
@@ -591,7 +604,7 @@ class SentimentAnalyzer:
                     keras.callbacks.EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=self.patience))
 
             history = self.classifier.fit(X, y, validation_split=self.validation_split, callbacks=es,
-                                          batch_size=self.batch_size,
+                                          batch_size=self.batch_size, sample_weight=weights,
                                           epochs=self.max_iter, verbose=1)
             self.accuracy = np.max(history.history['val_acc'])
             return history
@@ -693,7 +706,7 @@ class SentimentAnalyzer:
             self.embedding_matrix = None
             self.accuracy = accuracy
 
-        def fit(self, train_data, y, **kwargs):
+        def fit(self, train_data, y, weights=None, **kwargs):
             """
             :param train_data:
             :param y:
@@ -764,12 +777,12 @@ class SentimentAnalyzer:
 
             print('Fitting LSTM model')
             history = self.classifier.fit(X, y, validation_split=self.validation_split, callbacks=es,
-                                          batch_size=self.batch_size,
+                                          batch_size=self.batch_size, sample_weight=weights,
                                           epochs=self.max_iter, verbose=1)
             self.accuracy = np.max(history.history['val_acc'])
             return history
 
-        def refine(self, train_data, y, bootstrap=True):
+        def refine(self, train_data, y, bootstrap=True, weights=None):
             """
             Train model further
             :param train_data:1
@@ -801,7 +814,7 @@ class SentimentAnalyzer:
                 es.append(keras.callbacks.EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=self.patience))
 
             history = self.classifier.fit(X, y, validation_split=validation_split, callbacks=es,
-                                          batch_size=self.batch_size,
+                                          batch_size=self.batch_size, sample_weight=weights,
                                           epochs=max_iter, verbose=1)
             self.accuracy = np.max(history.history['val_acc'])
             return history
