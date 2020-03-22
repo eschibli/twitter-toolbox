@@ -19,7 +19,8 @@ from keras.preprocessing.sequence import pad_sequences
 # TODO consider renaming glove to pre-trained as it in principle should work with any pre-trained index
 # TODO find way to limit learning rate when refining BoW model
 
-def tokenizer_filter(text, remove_punctuation=True, remove_stopwords=True, lemmatize=True, lemmatize_pronouns=False):
+def tokenizer_filter(text, remove_punctuation=True, remove_stopwords=True, lemmatize=True, lemmatize_pronouns=False,
+                     verbose=True):
     """
     :param text: (series) Text to process
     :param remove_punctuation: (bool) Strip all punctuation
@@ -60,7 +61,9 @@ def tokenizer_filter(text, remove_punctuation=True, remove_stopwords=True, lemma
             filtered_tokens.append(tokens)
             count = count + 1
             # Starting with a carriage return rather than ending with one keeps the text visible in some IDEs.
-            print('\r Preprocessed %d tweets' % count, end=' ')
+            if verbose and count%1000 == 0:
+                print('\r Preprocessed %d tweets' % count, end=' ')
+        if verbose: print('\r Preprocessed %d tweets' % count, end=' ')
         return filtered_tokens
     elif lemmatize:
         for doc in nlp.pipe(docs):
@@ -69,8 +72,10 @@ def tokenizer_filter(text, remove_punctuation=True, remove_stopwords=True, lemma
                       else token.lower_ for token in doc if token_filter(token)]
             count = count + 1
             # Starting with a carriage return rather than ending with one keeps the text visible in some IDEs.
-            print('\r Preprocessed %d tweets'% count, end=' ')
+            if verbose and count%1000 == 0:
+                print('\r Preprocessed %d tweets'% count, end=' ')
             filtered_tokens.append(tokens)
+        if verbose: print('\r Preprocessed %d tweets' % count, end=' ')
         return filtered_tokens
     else:
         # lemmatizing pronouns to -PRON- is desirable when not using pre-trained embeddings
@@ -79,7 +84,9 @@ def tokenizer_filter(text, remove_punctuation=True, remove_stopwords=True, lemma
             filtered_tokens.append(tokens)
             count = count + 1
             # Starting with a carriage return rather than ending with one keeps the text visible in some IDEs.
-            print('\r Preprocessed %d tweets' % count, end=' ')
+            if verbose and count%1000 == 0:
+                print('\r Preprocessed %d tweets' % count, end=' ')
+        if verbose: print('\r Preprocessed %d tweets' % count, end=' ')
         return filtered_tokens
 
 
@@ -400,7 +407,8 @@ class SentimentAnalyzer:
             """
             if self.classifier is None:
                 raise ValueError('Model has not been trained!')
-            filtered_data = tokenizer_filter(data, remove_punctuation=True, remove_stopwords=True, lemmatize=True)
+            filtered_data = tokenizer_filter(data, remove_punctuation=True, remove_stopwords=True, lemmatize=True,
+                                             verbose=False)
             cleaned_data = [' '.join(tweet) for tweet in filtered_data]
             X = self.vectorizer.transform(cleaned_data)
             return self.classifier.predict(X)
@@ -616,7 +624,7 @@ class SentimentAnalyzer:
             from keras.preprocessing.sequence import pad_sequences
             if self.tokenizer is None:
                 raise ValueError('Model has not been trained!')
-            filtered_data = tokenizer_filter(data, remove_punctuation=True, remove_stopwords=True, lemmatize=True)
+            filtered_data = tokenizer_filter(data, remove_punctuation=True, remove_stopwords=True, lemmatize=True, verbose=False)
             cleaned_data = [' '.join(tweet) for tweet in filtered_data]
             X = pad_sequences(self.tokenizer.texts_to_sequences(cleaned_data), maxlen=self.max_length)
             return self.classifier.predict(X)
@@ -826,7 +834,7 @@ class SentimentAnalyzer:
             from keras.preprocessing.sequence import pad_sequences
             if self.tokenizer is None:
                 raise ValueError('Model has not been trained!')
-            filtered_data = tokenizer_filter(data, remove_punctuation=True, remove_stopwords=True, lemmatize=True)
+            filtered_data = tokenizer_filter(data, remove_punctuation=True, remove_stopwords=True, lemmatize=True, verbose=False)
             cleaned_data = [' '.join(tweet) for tweet in filtered_data]
             X = pad_sequences(self.tokenizer.texts_to_sequences(cleaned_data), maxlen=self.max_length)
             return self.classifier.predict(X)
