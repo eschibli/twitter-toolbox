@@ -206,14 +206,21 @@ class SentimentAnalyzer:
                 print('Error using model %s' % name)
         return np.mean(predictions, axis=0)
 
-    def save_models(self):
+    def save_models(self, names=None):
         """
         Write models to disk for re-use
         """
-
-        for name, model in self.models.items():
-            model.export(self.model_path + '/' + name)
-            print('Model %s saved' % name)
+        if names is None:
+            for name, model in self.models.items():
+                model.export(self.model_path + '/' + name)
+                print('Model %s saved' % name)
+        else:
+            for name in names:
+                try:
+                    self.models[name].export(self.model_path + '/' + name)
+                    print('Model %s saved' % name)
+                except KeyError:
+                    print('Model %s not found!' % name)
 
     def load_models(self, filenames=None, path=None):
         """
