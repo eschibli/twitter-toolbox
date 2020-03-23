@@ -61,7 +61,7 @@ def tokenizer_filter(text, remove_punctuation=True, remove_stopwords=True, lemma
             filtered_tokens.append(tokens)
             count = count + 1
             # Starting with a carriage return rather than ending with one keeps the text visible in some IDEs.
-            if verbose and count%1000 == 0:
+            if verbose and count % 1000 == 0:
                 print('\r Preprocessed %d tweets' % count, end=' ')
         if verbose: print('\r Preprocessed %d tweets' % count, end=' ')
         return filtered_tokens
@@ -72,8 +72,8 @@ def tokenizer_filter(text, remove_punctuation=True, remove_stopwords=True, lemma
                       else token.lower_ for token in doc if token_filter(token)]
             count = count + 1
             # Starting with a carriage return rather than ending with one keeps the text visible in some IDEs.
-            if verbose and count%1000 == 0:
-                print('\r Preprocessed %d tweets'% count, end=' ')
+            if verbose and count % 1000 == 0:
+                print('\r Preprocessed %d tweets' % count, end=' ')
             filtered_tokens.append(tokens)
         if verbose: print('\r Preprocessed %d tweets' % count, end=' ')
         return filtered_tokens
@@ -84,7 +84,7 @@ def tokenizer_filter(text, remove_punctuation=True, remove_stopwords=True, lemma
             filtered_tokens.append(tokens)
             count = count + 1
             # Starting with a carriage return rather than ending with one keeps the text visible in some IDEs.
-            if verbose and count%1000 == 0:
+            if verbose and count % 1000 == 0:
                 print('\r Preprocessed %d tweets' % count, end=' ')
         if verbose: print('\r Preprocessed %d tweets' % count, end=' ')
         return filtered_tokens
@@ -109,7 +109,6 @@ class SentimentAnalyzer:
                 self.add_glove_model(name, **params)
             else:
                 print('Model type %s not recognized' % type)
-
 
     def set_model_path(self, model_path):
         self.model_path = model_path
@@ -306,12 +305,11 @@ class SentimentAnalyzer:
         :param y: (vector) targets
         :param metric: (method) Metric to use
         """
-
         scores = {'ensembled': metric(y, self.predict(X))}
         for name, model in self.models.items():
             try:
                 scores[name] = metric(y, model.predict(X))
-                print('Model %s score: %0.3f' % (name, scores[name]))
+                print('Model %s %s: %0.3f' % (name, metric.__name__, scores[name]))
             except ValueError:
                 print('Error, %s probably has not been trained' % name)
         return scores
@@ -624,7 +622,8 @@ class SentimentAnalyzer:
             from keras.preprocessing.sequence import pad_sequences
             if self.tokenizer is None:
                 raise ValueError('Model has not been trained!')
-            filtered_data = tokenizer_filter(data, remove_punctuation=True, remove_stopwords=True, lemmatize=True, verbose=False)
+            filtered_data = tokenizer_filter(data, remove_punctuation=True, remove_stopwords=True, lemmatize=True,
+                                             verbose=False)
             cleaned_data = [' '.join(tweet) for tweet in filtered_data]
             X = pad_sequences(self.tokenizer.texts_to_sequences(cleaned_data), maxlen=self.max_length)
             return self.classifier.predict(X)
@@ -819,7 +818,8 @@ class SentimentAnalyzer:
 
             es = []
             if self.early_stopping:
-                es.append(keras.callbacks.EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=self.patience))
+                es.append(
+                    keras.callbacks.EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=self.patience))
 
             history = self.classifier.fit(X, y, validation_split=validation_split, callbacks=es,
                                           batch_size=self.batch_size, sample_weight=weights,
@@ -834,7 +834,8 @@ class SentimentAnalyzer:
             from keras.preprocessing.sequence import pad_sequences
             if self.tokenizer is None:
                 raise ValueError('Model has not been trained!')
-            filtered_data = tokenizer_filter(data, remove_punctuation=True, remove_stopwords=True, lemmatize=True, verbose=False)
+            filtered_data = tokenizer_filter(data, remove_punctuation=True, remove_stopwords=True, lemmatize=True,
+                                             verbose=False)
             cleaned_data = [' '.join(tweet) for tweet in filtered_data]
             X = pad_sequences(self.tokenizer.texts_to_sequences(cleaned_data), maxlen=self.max_length)
             return self.classifier.predict(X)
