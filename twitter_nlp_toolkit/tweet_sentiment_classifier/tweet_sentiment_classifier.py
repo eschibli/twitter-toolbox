@@ -171,6 +171,8 @@ class SentimentAnalyzer:
 
         if weights is None:
             weights = np.ones(len(y))
+        else:
+            weights = np.array(weights)
 
         if models is None:
             models = self.models.keys()
@@ -178,9 +180,6 @@ class SentimentAnalyzer:
         for name in models:
             try:
                 print('Fitting %s' % name)
-                print(X)
-                print(y)
-                print(weights)
                 self.models[name].fit(X, y, weights=weights, custom_glove_vocabulary=custom_glove_vocabulary)
             except ValueError:
                 print('Model %s not found!' % name)
@@ -589,9 +588,7 @@ class SentimentAnalyzer:
                 es.append(
                     keras.callbacks.EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=self.patience))
             print('Fitting GloVE model')
-            print(X.shape)
-            print(y)
-            print(weights)
+
 
             history = self.classifier.fit(X, y, validation_split=self.validation_split, batch_size=self.batch_size,
                                           epochs=self.max_iter, sample_weight=weights,
@@ -817,16 +814,19 @@ class SentimentAnalyzer:
                     keras.callbacks.EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=self.patience))
 
             print('Fitting LSTM model')
+
             history = self.classifier.fit(X, y, validation_split=self.validation_split, callbacks=es,
                                           batch_size=self.batch_size, sample_weight=weights,
                                           epochs=self.max_iter, verbose=1)
+
+
             self.accuracy = np.max(history.history['val_acc'])
             return history
 
         def refine(self, train_data, y, bootstrap=True, weights=None):
             """
             Train model further
-            :param train_data:1
+            :param train_data:
             :param y:
             :param max_iter:
             :param vocab_size:
