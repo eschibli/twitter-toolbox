@@ -158,7 +158,7 @@ class SentimentAnalyzer:
                 print('Deleting model %s' % name)
                 del self.models[name]
 
-    def fit(self, X, y, models=[], weights=None):
+    def fit(self, X, y, models=None, weights=None, custom_glove_vocabulary=None):
         """
         Fits the enabled models onto X. Note that this rebuilds the models, as it is not currently possible to update
         the tokenizers
@@ -168,17 +168,25 @@ class SentimentAnalyzer:
         cause an error if additional models have been added after fitting a pre-trained embedding model
         :return:
         """
-        if len(models) == 0:
+
+        if weights is None:
+            weights = np.ones(len(y))
+
+        if models is None:
             models = self.models.keys()
 
         for name in models:
             try:
                 print('Fitting %s' % name)
-                self.models[name].fit(X, y, weights=weights)
-            except KeyError:
+                print(X)
+                print(y)
+                print(weights)
+                self.models[name].fit(X, y, weights=weights, custom_glove_vocabulary=custom_glove_vocabulary)
+            except ValueError:
                 print('Model %s not found!' % name)
 
-    def refine(self, X, y, bootstrap=True, weights=None, **kwargs):
+
+    def refine(self, X, y, bootstrap=True, weights=None):
         """
         Refits the trained models onto additional data. Not that this does NOT retrain the tokenizers, so it will not
         retrain the vocabulary
@@ -188,7 +196,7 @@ class SentimentAnalyzer:
         """
 
         for model in self.models.values():
-            model.refine(X, y, bootstrap=bootstrap, **kwargs)
+            model.refine(X, y, bootstrap=bootstrap, weights=weights)
 
     def predict(self, X):
         """
@@ -304,14 +312,18 @@ class SentimentAnalyzer:
         :param X: (array) Feature matrix
         :param y: (vector) targets
         :param metric: (method) Metric to use
+        # TODO try to improve performance by
         """
-        scores = {'ensembled': metric(y, self.predict(X))}
+        scores = {}
         for name, model in self.models.items():
             try:
                 scores[name] = metric(y, model.predict(X))
                 print('Model %s %s: %0.3f' % (name, metric.__name__, scores[name]))
             except ValueError:
                 print('Error, %s probably has not been trained' % name)
+
+        if len(self.models.values()) > 1:
+            scores['ensembled'] = metric(y, self.predict(X))
         return scores
 
     class BoW_Model:
@@ -334,7 +346,7 @@ class SentimentAnalyzer:
             self.accuracy = accuracy
             self.bootstrap = bootstrap
 
-        def fit(self, train_data, y, weights=None):
+        def fit(self, train_data, y, weights=None, custom_glove_vocabulary=None):
             """
             Fit the model (from scratch)
             :param train_data: (List-like) List of strings to train on
@@ -487,7 +499,7 @@ class SentimentAnalyzer:
             if self.embedding_dict is not None:
                 self.embed_vec_len = len(list(self.embedding_dict.values())[0])
 
-        def fit(self, train_data, y, clear_embedding_dict=True, weights=None, **kwargs):
+        def fit(self, train_data, y, clear_embedding_dict=True, weights=None, custom_glove_vocabulary=None):
             """
             :param train_data: (Dataframe) Training data
             :param y: (vector) Targets
@@ -500,19 +512,27 @@ class SentimentAnalyzer:
             # Preprocess and tokenize text
             """
 
+            if weights is None:
+                weights = np.ones(len(y))
+
             if 1 < self.bootstrap < len(y):
-                train_data, y = resample(train_data, y, n_samples=self.bootstrap, stratify=y, replace=False)
+                train_data, y, weights = resample(train_data, y, weights, n_samples=self.bootstrap, stratify=y, replace=False)
             elif self.bootstrap < 1:
                 n_samples = int(self.bootstrap * len(y))
-                train_data, y = resample(train_data, y, n_samples=n_samples, stratify=y, replace=False)
+                train_data, y, weights = resample(train_data, y, weights, n_samples=n_samples, stratify=y, replace=False)
             print('Sampled %d training points' % len(y))
             filtered_data = tokenizer_filter(train_data, remove_punctuation=False, remove_stopwords=False,
                                              lemmatize=True)
             print('Filtered data')
             cleaned_data = [' '.join(tweet) for tweet in filtered_data]
 
-            self.tokenizer = Tokenizer(num_words=self.vocab_size)
-            self.tokenizer.fit_on_texts(cleaned_data)
+            if custom_glove_vocabulary is not None:
+                self.tokenizer = Tokenizer(num_words=len(custom_glove_vocabulary))
+                self.tokenizer.fit_on_texts(custom_glove_vocabulary)
+            else:
+                self.tokenizer = Tokenizer(num_words=self.vocab_size)
+                self.tokenizer.fit_on_texts(cleaned_data)
+
             train_sequences = self.tokenizer.texts_to_sequences(cleaned_data)
 
             self.word_index = self.tokenizer.word_index
@@ -569,6 +589,10 @@ class SentimentAnalyzer:
                 es.append(
                     keras.callbacks.EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=self.patience))
             print('Fitting GloVE model')
+            print(X.shape)
+            print(y)
+            print(weights)
+
             history = self.classifier.fit(X, y, validation_split=self.validation_split, batch_size=self.batch_size,
                                           epochs=self.max_iter, sample_weight=weights,
                                           callbacks=es, verbose=1)
@@ -585,14 +609,18 @@ class SentimentAnalyzer:
             :return:
             """
 
+            if weights is None:
+                weights = np.ones(len(y))
+
             """
             # Preprocess and tokenize text
             """
+
             if bootstrap and 1 < self.bootstrap < len(y):
-                train_data, y = resample(train_data, y, n_samples=self.bootstrap, stratify=y, replace=False)
+                train_data, y, weights = resample(train_data, y, weights, n_samples=self.bootstrap, stratify=y, replace=False)
             elif bootstrap and self.bootstrap < 1:
                 n_samples = int(self.bootstrap * len(y))
-                train_data, y = resample(train_data, y, n_samples=n_samples, stratify=y, replace=False)
+                train_data, y, weights = resample(train_data, y, weights, n_samples=n_samples, stratify=y, replace=False)
 
             filtered_data = tokenizer_filter(train_data, remove_punctuation=False, remove_stopwords=False,
                                              lemmatize=True)
@@ -655,9 +683,9 @@ class SentimentAnalyzer:
                 json.dump(parameters, outfile)
             with open(filename + '/glove_tokenizer.pkl', 'wb+') as outfile:
                 pkl.dump(self.tokenizer, outfile)
-            model_json = self.classifier.to_json()
+            # model_json = self.classifier.to_json()
             with open(filename + "/glove_model.json", "w+") as json_file:
-                json_file.write(model_json)
+                json_file.write(self.classifier.to_json())
             self.classifier.save_weights(filename + "/glove_model.h5")
 
         def load_model(self, filename):
@@ -713,7 +741,7 @@ class SentimentAnalyzer:
             self.embedding_matrix = None
             self.accuracy = accuracy
 
-        def fit(self, train_data, y, weights=None, **kwargs):
+        def fit(self, train_data, y, weights=None, custom_glove_vocabulary=None):
             """
             :param train_data:
             :param y:
@@ -721,26 +749,32 @@ class SentimentAnalyzer:
             :param validation_split: (float) Fraction of training data to withold for validation
             :param patience: (int) Number of epochs to wait before early stopping
             :return:
+            # TODO preprocess custom_vocabulary the reduce memory usage
             """
+
+            if weights is None:
+                weights = np.ones(len(y))
 
             """
             # Preprocess and tokenize text
             """
 
             if 1 < self.bootstrap < len(y):
-                train_data, y = resample(train_data, y, n_samples=self.bootstrap, stratify=y, replace=False)
+                train_data, y, weights = resample(train_data, y, weights, n_samples=self.bootstrap, stratify=y, replace=False)
             elif self.bootstrap < 1:
                 n_samples = int(self.bootstrap * len(y))
-                train_data, y = resample(train_data, y, n_samples=n_samples, stratify=y, replace=False)
+                train_data, y, weights = resample(train_data, y, weights, n_samples=n_samples, stratify=y, replace=False)
 
             filtered_data = tokenizer_filter(train_data, remove_punctuation=False, remove_stopwords=False,
                                              lemmatize=True)
 
             print('Filtered data')
             cleaned_data = [' '.join(tweet) for tweet in filtered_data]
-            self.tokenizer = Tokenizer(num_words=self.vocab_size, filters='"#$%&()*+-/:;<=>?@[\\]^_`{|}~\t\n')
 
+
+            self.tokenizer = Tokenizer(num_words=self.vocab_size, filters='"#$%&()*+-/:;<=>?@[\\]^_`{|}~\t\n')
             self.tokenizer.fit_on_texts(cleaned_data)
+
             train_sequences = self.tokenizer.texts_to_sequences(cleaned_data)
 
             self.word_index = self.tokenizer.word_index
@@ -804,10 +838,10 @@ class SentimentAnalyzer:
             """
 
             if bootstrap and 1 < self.bootstrap < len(y):
-                train_data, y = resample(train_data, y, n_samples=self.bootstrap, stratify=y, replace=False)
+                train_data, y, weights = resample(train_data, y, weights, n_samples=self.bootstrap, stratify=y, replace=False)
             elif bootstrap and self.bootstrap < 1:
                 n_samples = int(self.bootstrap * len(y))
-                train_data, y = resample(train_data, y, n_samples=n_samples, stratify=y, replace=False)
+                train_data, y, weights = resample(train_data, y, weights, n_samples=n_samples, stratify=y, replace=False)
 
             filtered_data = tokenizer_filter(train_data, remove_punctuation=False, remove_stopwords=False,
                                              lemmatize=True)
