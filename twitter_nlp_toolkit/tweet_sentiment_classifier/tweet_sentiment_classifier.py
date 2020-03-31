@@ -15,9 +15,9 @@ import keras
 from keras.preprocessing.text import Tokenizer
 from keras.preprocessing.sequence import pad_sequences
 
-
-# TODO consider renaming glove to pre-trained as it in principle should work with any pre-trained index
-# TODO find way to limit learning rate when refining BoW model
+# Urgent TODO tokenizer_filter appears to hang when a tweet contains a a single unprocessable word - confirm and fix
+# Possible TODO consider renaming glove to pre-trained as it in principle should work with any pre-trained index
+# Possible TODO find way to limit learning rate when refining BoW model
 
 def tokenizer_filter(text, remove_punctuation=True, remove_stopwords=True, lemmatize=True, lemmatize_pronouns=False,
                      verbose=True):
@@ -63,7 +63,7 @@ def tokenizer_filter(text, remove_punctuation=True, remove_stopwords=True, lemma
             # Starting with a carriage return rather than ending with one keeps the text visible in some IDEs.
             if verbose and count % 1000 == 0:
                 print('\r Preprocessed %d tweets' % count, end=' ')
-        if verbose: print('\r Preprocessed %d tweets' % count, end=' ')
+        if verbose: print('\r Preprocessed %d tweets' % count)
         return filtered_tokens
     elif lemmatize:
         for doc in nlp.pipe(docs):
@@ -75,7 +75,7 @@ def tokenizer_filter(text, remove_punctuation=True, remove_stopwords=True, lemma
             if verbose and count % 1000 == 0:
                 print('\r Preprocessed %d tweets' % count, end=' ')
             filtered_tokens.append(tokens)
-        if verbose: print('\r Preprocessed %d tweets' % count, end=' ')
+        if verbose: print('\r Preprocessed %d tweets' % count)
         return filtered_tokens
     else:
         # lemmatizing pronouns to -PRON- is desirable when not using pre-trained embeddings
@@ -86,7 +86,7 @@ def tokenizer_filter(text, remove_punctuation=True, remove_stopwords=True, lemma
             # Starting with a carriage return rather than ending with one keeps the text visible in some IDEs.
             if verbose and count % 1000 == 0:
                 print('\r Preprocessed %d tweets' % count, end=' ')
-        if verbose: print('\r Preprocessed %d tweets' % count, end=' ')
+        if verbose: print('\r Preprocessed %d tweets' % count)
         return filtered_tokens
 
 
@@ -158,7 +158,7 @@ class SentimentAnalyzer:
                 print('Deleting model %s' % name)
                 del self.models[name]
 
-    def fit(self, X, y, models=None, weights=None, custom_glove_vocabulary=None):
+    def fit(self, X, y, models=None, weights=None, custom_glove_vocabulary=None, preprocess=True):
         """
         Fits the enabled models onto X. Note that this rebuilds the models, as it is not currently possible to update
         the tokenizers
@@ -180,12 +180,13 @@ class SentimentAnalyzer:
         for name in models:
             try:
                 print('Fitting %s' % name)
-                self.models[name].fit(X, y, weights=weights, custom_glove_vocabulary=custom_glove_vocabulary)
-            except ValueError:
+                self.models[name].fit(X, y, weights=weights, custom_glove_vocabulary=custom_glove_vocabulary,
+                                      preprocess=preprocess)
+            except KeyError :
                 print('Model %s not found!' % name)
 
 
-    def refine(self, X, y, bootstrap=True, weights=None):
+    def refine(self, X, y, **kwargs):
         """
         Refits the trained models onto additional data. Not that this does NOT retrain the tokenizers, so it will not
         retrain the vocabulary
@@ -195,7 +196,7 @@ class SentimentAnalyzer:
         """
 
         for model in self.models.values():
-            model.refine(X, y, bootstrap=bootstrap, weights=weights)
+            model.refine(X, y, **kwargs)
 
     def predict(self, X):
         """
@@ -207,12 +208,12 @@ class SentimentAnalyzer:
 
         return np.round(predictions)
 
-    def predict_proba(self, X):
+    def predict_proba(self, X, **kwargs):
         predictions = []
 
         for name, model in self.models.items():
             try:
-                predictions.append(model.predict_proba(X).reshape(-1))
+                predictions.append(model.predict_proba(X, **kwargs).reshape(-1))
             except ValueError:
                 print('Error using model %s - probably has not been trained' % name)
             except:
@@ -345,7 +346,7 @@ class SentimentAnalyzer:
             self.accuracy = accuracy
             self.bootstrap = bootstrap
 
-        def fit(self, train_data, y, weights=None, custom_glove_vocabulary=None):
+        def fit(self, train_data, y, weights=None, custom_glove_vocabulary=None, preprocess=True):
             """
             Fit the model (from scratch)
             :param train_data: (List-like) List of strings to train on
@@ -364,9 +365,13 @@ class SentimentAnalyzer:
                 n_samples = int(self.bootstrap * len(y))
                 train_data, y = resample(train_data, y, n_samples=n_samples, stratify=y, replace=False)
 
-            filtered_data = tokenizer_filter(train_data, remove_punctuation=True, remove_stopwords=True, lemmatize=True)
+            if preprocess:
+                filtered_data = tokenizer_filter(train_data, remove_punctuation=False, remove_stopwords=False,
+                                                 lemmatize=True)
+            else:
+                filtered_data = train_data
 
-            self.vectorizer = TfidfVectorizer(analyzer=str.split, max_features=self.vocab_size)
+            self.vectorizer = TfidfVectorizer(analyzer=str.split, max_features=self.vocab_size, stop_words='english')
             cleaned_data = [' '.join(tweet) for tweet in filtered_data]
             X = self.vectorizer.fit_transform(cleaned_data)
 
@@ -376,7 +381,7 @@ class SentimentAnalyzer:
             self.classifier = LogisticRegression(random_state=0, max_iter=self.max_iter).fit(trainX, trainY)
             self.accuracy = accuracy_score(testY, self.classifier.predict(testX))
 
-        def refine(self, train_data, y, bootstrap=True, weights=None, max_iter=500):
+        def refine(self, train_data, y, bootstrap=True, weights=None, max_iter=500, preprocess=True):
             """
             Train the models further on new data. Note that it is not possible to increase the vocabulary
             :param train_data: (List-like of Strings) List of strings to train on
@@ -395,9 +400,12 @@ class SentimentAnalyzer:
             elif bootstrap and self.bootstrap < 1:
                 n_samples = int(self.bootstrap * len(y))
                 train_data, y = resample(train_data, y, n_samples=n_samples, stratify=y, replace=False)
-
-            filtered_data = tokenizer_filter(train_data, remove_punctuation=True, remove_stopwords=True, lemmatize=True)
-            print('\n Filtered data')
+            if preprocess:
+                filtered_data = tokenizer_filter(train_data, remove_punctuation=False, remove_stopwords=False,
+                                                 lemmatize=True)
+                print('\n Filtered data')
+            else:
+                filtered_data = train_data
 
             cleaned_data = [' '.join(tweet) for tweet in filtered_data]
             X = self.vectorizer.transform(cleaned_data)
@@ -405,10 +413,10 @@ class SentimentAnalyzer:
 
             self.classifier.fit(X, y)
 
-        def predict(self, data):
-            return np.round(self.predict_proba(data))
+        def predict(self, data, **kwargs):
+            return np.round(self.predict_proba(data, **kwargs))
 
-        def predict_proba(self, data):
+        def predict_proba(self, data, preprocess=True):
             """
             Makes predictions
             :param data: (List-like) List of strings to predict sentiment
@@ -416,8 +424,12 @@ class SentimentAnalyzer:
             """
             if self.classifier is None:
                 raise ValueError('Model has not been trained!')
-            filtered_data = tokenizer_filter(data, remove_punctuation=True, remove_stopwords=True, lemmatize=True,
-                                             verbose=False)
+            if preprocess:
+                filtered_data = tokenizer_filter(data, remove_punctuation=False, remove_stopwords=False,
+                                                 lemmatize=True, verbose=False)
+            else:
+                filtered_data = data
+
             cleaned_data = [' '.join(tweet) for tweet in filtered_data]
             X = self.vectorizer.transform(cleaned_data)
             return self.classifier.predict(X)
@@ -498,7 +510,8 @@ class SentimentAnalyzer:
             if self.embedding_dict is not None:
                 self.embed_vec_len = len(list(self.embedding_dict.values())[0])
 
-        def fit(self, train_data, y, clear_embedding_dict=True, weights=None, custom_glove_vocabulary=None):
+        def fit(self, train_data, y, clear_embedding_dict=True, weights=None, custom_glove_vocabulary=None,
+                preprocess=True):
             """
             :param train_data: (Dataframe) Training data
             :param y: (vector) Targets
@@ -515,14 +528,20 @@ class SentimentAnalyzer:
                 weights = np.ones(len(y))
 
             if 1 < self.bootstrap < len(y):
-                train_data, y, weights = resample(train_data, y, weights, n_samples=self.bootstrap, stratify=y, replace=False)
+                train_data, y, weights = resample(train_data, y, weights, n_samples=self.bootstrap, stratify=y,
+                                                  replace=False)
             elif self.bootstrap < 1:
                 n_samples = int(self.bootstrap * len(y))
-                train_data, y, weights = resample(train_data, y, weights, n_samples=n_samples, stratify=y, replace=False)
+                train_data, y, weights = resample(train_data, y, weights, n_samples=n_samples, stratify=y,
+                                                  replace=False)
             print('Sampled %d training points' % len(y))
-            filtered_data = tokenizer_filter(train_data, remove_punctuation=False, remove_stopwords=False,
-                                             lemmatize=True)
-            print('Filtered data')
+            if preprocess:
+                filtered_data = tokenizer_filter(train_data, remove_punctuation=False, remove_stopwords=False,
+                                                 lemmatize=True)
+                print('Filtered data')
+            else:
+                filtered_data = train_data
+
             cleaned_data = [' '.join(tweet) for tweet in filtered_data]
 
             if custom_glove_vocabulary is not None:
@@ -597,7 +616,7 @@ class SentimentAnalyzer:
             self.accuracy = np.max(history.history['val_acc'])
             return history
 
-        def refine(self, train_data, y, bootstrap=True, weights=None):
+        def refine(self, train_data, y, bootstrap=True, weights=None, preprocess=True):
             """
             Train model further
             :param train_data:
@@ -618,11 +637,12 @@ class SentimentAnalyzer:
             elif bootstrap and self.bootstrap < 1:
                 n_samples = int(self.bootstrap * len(y))
                 train_data, y, weights = resample(train_data, y, weights, n_samples=n_samples, stratify=y, replace=False)
-
-            filtered_data = tokenizer_filter(train_data, remove_punctuation=False, remove_stopwords=False,
-                                             lemmatize=True)
-
-            print('Filtered data')
+            if preprocess:
+                filtered_data = tokenizer_filter(train_data, remove_punctuation=False, remove_stopwords=False,
+                                                 lemmatize=True, verbose=True)
+                print('Filtered data')
+            else:
+                filtered_data = train_data
 
             cleaned_data = [' '.join(tweet) for tweet in filtered_data]
             train_sequences = self.tokenizer.texts_to_sequences(cleaned_data)
@@ -640,15 +660,18 @@ class SentimentAnalyzer:
             self.accuracy = np.max(history.history['val_acc'])
             return history
 
-        def predict(self, data):
-            return np.round(self.predict_proba(data))
+        def predict(self, data, **kwargs):
+            return np.round(self.predict_proba(data, **kwargs))
 
-        def predict_proba(self, data):
+        def predict_proba(self, data, preprocess=True):
             from keras.preprocessing.sequence import pad_sequences
             if self.tokenizer is None:
                 raise ValueError('Model has not been trained!')
-            filtered_data = tokenizer_filter(data, remove_punctuation=True, remove_stopwords=True, lemmatize=True,
-                                             verbose=False)
+            if preprocess:
+                filtered_data = tokenizer_filter(data, remove_punctuation=False, remove_stopwords=False,
+                                                 lemmatize=True, verbose=False)
+            else:
+                filtered_data = data
             cleaned_data = [' '.join(tweet) for tweet in filtered_data]
             X = pad_sequences(self.tokenizer.texts_to_sequences(cleaned_data), maxlen=self.max_length)
             return self.classifier.predict(X)
@@ -738,7 +761,7 @@ class SentimentAnalyzer:
             self.embedding_matrix = None
             self.accuracy = accuracy
 
-        def fit(self, train_data, y, weights=None, custom_glove_vocabulary=None):
+        def fit(self, train_data, y, weights=None, custom_glove_vocabulary=None, preprocess=True):
             """
             :param train_data:
             :param y:
@@ -762,10 +785,13 @@ class SentimentAnalyzer:
                 n_samples = int(self.bootstrap * len(y))
                 train_data, y, weights = resample(train_data, y, weights, n_samples=n_samples, stratify=y, replace=False)
 
-            filtered_data = tokenizer_filter(train_data, remove_punctuation=False, remove_stopwords=False,
-                                             lemmatize=True)
+            if preprocess:
+                filtered_data = tokenizer_filter(train_data, remove_punctuation=False, remove_stopwords=False,
+                                                 lemmatize=True, verbose=True)
+                print('Filtered data')
+            else:
+                filtered_data = train_data
 
-            print('Filtered data')
             cleaned_data = [' '.join(tweet) for tweet in filtered_data]
 
 
@@ -819,11 +845,10 @@ class SentimentAnalyzer:
                                           batch_size=self.batch_size, sample_weight=weights,
                                           epochs=self.max_iter, verbose=1)
 
-
             self.accuracy = np.max(history.history['val_acc'])
             return history
 
-        def refine(self, train_data, y, bootstrap=True, weights=None):
+        def refine(self, train_data, y, bootstrap=True, weights=None, preprocess=True):
             """
             Train model further
             :param train_data:
@@ -843,8 +868,12 @@ class SentimentAnalyzer:
                 n_samples = int(self.bootstrap * len(y))
                 train_data, y, weights = resample(train_data, y, weights, n_samples=n_samples, stratify=y, replace=False)
 
-            filtered_data = tokenizer_filter(train_data, remove_punctuation=False, remove_stopwords=False,
-                                             lemmatize=True)
+            if preprocess:
+                filtered_data = tokenizer_filter(train_data, remove_punctuation=False, remove_stopwords=False,
+                                                 lemmatize=True)
+            else:
+                filtered_data = train_data
+
             cleaned_data = [' '.join(tweet) for tweet in filtered_data]
             train_sequences = self.tokenizer.texts_to_sequences(cleaned_data)
 
@@ -861,15 +890,19 @@ class SentimentAnalyzer:
             self.accuracy = np.max(history.history['val_acc'])
             return history
 
-        def predict(self, data):
-            return np.round(self.predict_proba(data))
+        def predict(self, data, **kwargs):
+            return np.round(self.predict_proba(data, **kwargs))
 
-        def predict_proba(self, data):
+        def predict_proba(self, data, preprocess=True):
             from keras.preprocessing.sequence import pad_sequences
             if self.tokenizer is None:
                 raise ValueError('Model has not been trained!')
-            filtered_data = tokenizer_filter(data, remove_punctuation=True, remove_stopwords=True, lemmatize=True,
-                                             verbose=False)
+
+            if preprocess:
+                filtered_data = tokenizer_filter(data, remove_punctuation=False, remove_stopwords=False,
+                                                 lemmatize=True, verbose=False)
+            else:
+                filtered_data = data
             cleaned_data = [' '.join(tweet) for tweet in filtered_data]
             X = pad_sequences(self.tokenizer.texts_to_sequences(cleaned_data), maxlen=self.max_length)
             return self.classifier.predict(X)
