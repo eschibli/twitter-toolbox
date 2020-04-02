@@ -683,20 +683,20 @@ class SentimentAnalyzer:
             """
 
             parameters = {'type': self.type,
-                          'max_length': self.max_length,
-                          'neurons': self.neurons,
-                          'dropout': self.dropout,
-                          'rec_dropout': self.rec_dropout,
+                          'max_length': int(self.max_length),
+                          'neurons': int(self.neurons),
+                          'dropout': float(self.dropout),
+                          'rec_dropout': float(self.rec_dropout),
                           'activ': self.activ,
                           'optimizer': self.optimizer,
-                          'vocab_size': self.vocab_size,
-                          'max_iter': self.max_iter,
+                          'vocab_size': int(self.vocab_size),
+                          'max_iter': int(self.max_iter),
                           'batch_size': self.batch_size,
                           'early_stopping': self.early_stopping,
-                          'patience': self.patience,
-                          'bootstrop': self.bootstrap,
-                          'validation_split': self.validation_split,
-                          'accuracy': self.accuracy}
+                          'patience': int(self.patience),
+                          'bootstrop': int(self.bootstrap),
+                          'validation_split': float(self.validation_split),
+                          'accuracy': float(self.accuracy)}
 
             os.makedirs(filename, exist_ok=True)
             with open(filename + '/glove_param.json', 'w+') as outfile:
