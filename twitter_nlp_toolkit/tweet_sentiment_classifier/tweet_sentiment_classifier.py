@@ -170,7 +170,7 @@ class SentimentAnalyzer:
                 print('Deleting model %s' % name)
                 self.delete_model(name)
 
-    def fit(self, X, y, models=None, weights=None, custom_vocabulary=None, preprocess=True):
+    def fit(self, X, y, models=None, weights=None, custom_vocabulary=None):
         """
         Fits the enabled models onto X. Note that this rebuilds the models, as it is not currently possible to update
         the tokenizers
@@ -192,8 +192,7 @@ class SentimentAnalyzer:
         for name in models:
             try:
                 print('Fitting %s' % name)
-                self.models[name].fit(X, y, weights=weights, custom_vocabulary=custom_vocabulary,
-                                      preprocess=preprocess)
+                self.models[name].fit(X, y, weights=weights, custom_vocabulary=custom_vocabulary)
             except KeyError:
                 print('Model %s not found!' % name)
 
@@ -409,7 +408,7 @@ class SentimentAnalyzer:
             self.classifier = LogisticRegression(max_iter=self.max_iter).fit(trainX, trainY)
             self.accuracy = accuracy_score(testY, self.classifier.predict(testX))
 
-        def refine(self, train_data, y, bootstrap=True, weights=None, max_iter=500, preprocess=True):
+        def refine(self, train_data, y, bootstrap=True, weights=None, max_iter=500):
             """
             Train the models further on new data. Note that it is not possible to increase the vocabulary
             :param train_data: (List-like of Strings) List of strings to train on
@@ -428,7 +427,6 @@ class SentimentAnalyzer:
             elif bootstrap and self.bootstrap < 1:
                 n_samples = int(self.bootstrap * len(y))
                 train_data, y = resample(train_data, y, n_samples=n_samples, stratify=y, replace=False)
-            if preprocess:
                 filtered_data = tokenizer_filter(train_data, remove_punctuation=self.remove_punctuation,
                                                  remove_stopwords=self.remove_stopwords, lemmatize=self.lemmatize)
                 print('\n Filtered data')
@@ -968,7 +966,7 @@ class SentimentAnalyzer:
             """
             return np.round(self.predict_proba(data, **kwargs))
 
-        def predict_proba(self, data, preprocess=True):
+        def predict_proba(self, data):
             """
             Make continuous predictions
             :param data:  (list of Strings) Tweets
