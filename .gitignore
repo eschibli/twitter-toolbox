@@ -13,8 +13,10 @@
 
 /build/
 
+test.json
 *.zip
 *.csv
 *.pkl
-
+*.idea
+keys.key
 push_to_pypi.bat
