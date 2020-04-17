@@ -95,7 +95,7 @@ def tokenizer_filter(text, remove_punctuation=True, remove_stopwords=True, lemma
 
 
 class SentimentAnalyzer:
-    def __init__(self, models=[], model_path='Models'):
+    def __init__(self, models=[], model_path='.Models'):
         """
         Constructor for SentimentAnalyzer module
         :param models: (list) Models to initialize. Should be a list of tuples formatted like (name, type, params)
