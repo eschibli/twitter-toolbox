@@ -11,22 +11,30 @@ cryptography==2.8
 cymem==1.31.2
 cytoolz==0.9.0.1
 dill==0.2.9
+en-core-web-sm==2.0.0
 gast==0.2.2
 google-auth==1.11.2
 google-auth-oauthlib==0.4.1
-google-pasta==0.1.8
+google-pasta==0.2.0
 grpcio==1.27.2
 h5py==2.10.0
 idna==2.9
 joblib==0.14.1
 Keras==2.3.1
 Keras-Applications==1.0.8
+keras-bert==0.81.0
+keras-embed-sim==0.7.0
+keras-layer-normalization==0.14.0
+keras-multi-head==0.22.0
+keras-pos-embd==0.11.0
+keras-position-wise-feed-forward==0.6.0
 Keras-Preprocessing==1.1.0
+keras-self-attention==0.41.0
+keras-transformer==0.32.0
 Markdown==3.1.1
-# menuinst # ==1.4.16
-# mkl-fft # ==1.0.15
-# mkl-random # ==1.1.0
-# mkl-service # ==2.3.0
+mkl-fft==1.0.15
+mkl-random==1.1.0
+mkl-service==2.3.0
 mock==4.0.1
 msgpack==0.5.6
 msgpack-numpy==0.4.3.2
@@ -34,13 +42,12 @@ murmurhash==0.28.0
 numpy==1.18.1
 oauthlib==3.1.0
 opt-einsum==3.1.0
-pandas==1.0.2
+pandas==1.0.3
 plac==0.9.6
 preshed==1.0.1
-protobuf # ==3.11.4
+protobuf==3.11.4
 pyasn1==0.4.8
 pyasn1-modules==0.2.7
-pycosat==0.6.3
 pycparser==2.20
 PyJWT==1.7.1
 pyOpenSSL==19.1.0
@@ -48,18 +55,16 @@ pyreadline==2.1
 PySocks==1.7.1
 python-dateutil==2.8.1
 pytz==2019.3
-pywin32==227
-PyYAML==5.3
+PyYAML==5.3.1
 regex==2018.7.11
 requests==2.23.0
 requests-oauthlib==1.3.0
 rsa==4.0
-ruamel-yaml==0.15.87
 scikit-learn==0.22.1
 scipy==1.4.1
 six==1.14.0
 spacy==2.0.12
-TBB # ==0.1
+TBB==0.1
 tensorboard==1.13.1
 tensorflow==1.13.1
 tensorflow-estimator==1.13.0
@@ -73,3 +78,4 @@ Werkzeug==0.14.1
 win-inet-pton==1.1.0
 wincertstore==0.2
 wrapt==1.10.11
+tqdm
