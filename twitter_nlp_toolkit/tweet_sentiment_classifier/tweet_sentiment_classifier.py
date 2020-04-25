@@ -1,19 +1,8 @@
-import numpy as np
-import pandas as pd
-import spacy
-import pickle as pkl
 import json
 import os
 
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.linear_model import LogisticRegression
+import numpy as np
 from sklearn.metrics import accuracy_score
-from sklearn.utils import resample
-from sklearn.model_selection import train_test_split
-
-import keras
-from keras.preprocessing.text import Tokenizer
-from keras.preprocessing.sequence import pad_sequences
 
 
 # Urgent TODO tokenizer_filter appears to hang when a tweet contains a a single unprocessable word - confirm and fix

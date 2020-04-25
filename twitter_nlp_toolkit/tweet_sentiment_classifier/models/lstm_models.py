@@ -5,9 +5,10 @@ import json
 import pickle as pkl
 import numpy as np
 
-import keras
-from keras_preprocessing.sequence import pad_sequences
-from keras_preprocessing.text import Tokenizer
+import tensorflow as tf
+
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+from tensorflow.keras.preprocessing.text import Tokenizer
 from sklearn.utils import resample
 
 
@@ -114,28 +115,28 @@ class LSTM_Model(Classifier):
         """
 
         print("Creating LSTM model")
-        init = keras.initializers.glorot_uniform(seed=1)
+        init = tf.keras.initializers.glorot_uniform(seed=1)
         optimizer = self.optimizer
 
-        self.classifier = keras.models.Sequential()
+        self.classifier = tf.keras.models.Sequential()
 
-        self.classifier.add(keras.layers.embeddings.Embedding(input_dim=len(self.word_index) + 1,
+        self.classifier.add(tf.keras.layers.embeddings.Embedding(input_dim=len(self.word_index) + 1,
                                                               output_dim=self.embed_vec_len,
                                                               input_length=self.max_length,
                                                               mask_zero=True,
                                                               embeddings_initializer=keras.initializers.glorot_normal(
                                                                   seed=None)))
-        self.classifier.add(keras.layers.SpatialDropout1D(dropout))
-        self.classifier.add(keras.layers.LSTM(units=neurons, input_shape=(self.max_length, self.embed_vec_len),
+        self.classifier.add(tf.keras.layers.SpatialDropout1D(dropout))
+        self.classifier.add(tf.keras.layers.LSTM(units=neurons, input_shape=(self.max_length, self.embed_vec_len),
                                               kernel_initializer=init, dropout=dropout,
                                               recurrent_dropout=rec_dropout))
-        self.classifier.add(keras.layers.Dense(units=1, kernel_initializer=init, activation=activ))
+        self.classifier.add(tf.keras.layers.Dense(units=1, kernel_initializer=init, activation=activ))
         self.classifier.compile(loss=costfunction, optimizer=optimizer, metrics=['acc'])
         print(self.classifier.summary())
         es = []
         if self.early_stopping:
             es.append(
-                keras.callbacks.EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=self.patience))
+                tf.keras.callbacks.EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=self.patience))
 
         print('Fitting LSTM model')
 
@@ -180,7 +181,7 @@ class LSTM_Model(Classifier):
         es = []
         if self.early_stopping:
             es.append(
-                keras.callbacks.EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=self.patience))
+                tf.keras.callbacks.EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=self.patience))
 
         history = self.classifier.fit(X, y, validation_split=self.validation_split, callbacks=es,
                                       batch_size=self.batch_size, sample_weight=weights,
@@ -202,7 +203,7 @@ class LSTM_Model(Classifier):
         :param data:  (list of Strings) Tweets
         :return: (vector) Predictions
         """
-        from keras.preprocessing.sequence import pad_sequences
+        from tf.keras.preprocessing.sequence import pad_sequences
         if self.tokenizer is None:
             raise ValueError('Model has not been trained!')
 
@@ -266,7 +267,7 @@ class LSTM_Model(Classifier):
         self.tokenizer = pkl.load(open(filename + '/lstm_tokenizer.pkl', 'rb'))
         with open(filename + '/lstm_model.json', 'r') as infile:
             model_json = infile.read()
-        self.classifier = keras.models.model_from_json(model_json)
+        self.classifier = tf.keras.models.model_from_json(model_json)
         self.classifier.load_weights(filename + '/lstm_model.h5')
         self.classifier.compile(loss='binary_crossentropy',
                                 optimizer=self.optimizer,
@@ -559,7 +560,7 @@ class GloVE_Model(Classifier):
         self.tokenizer = pkl.load(open(filename + '/glove_tokenizer.pkl', 'rb'))
         with open(filename + '/glove_model.json', 'r') as infile:
             model_json = infile.read()
-        self.classifier = keras.models.model_from_json(model_json)
+        self.classifier = tf.keras.models.model_from_json(model_json)
         self.classifier.load_weights(filename + '/glove_model.h5')
         self.classifier.compile(loss='binary_crossentropy',
                                 optimizer=self.optimizer,
