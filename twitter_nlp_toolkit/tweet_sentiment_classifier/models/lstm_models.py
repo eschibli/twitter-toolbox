@@ -402,24 +402,24 @@ class GloVE_Model(Classifier):
         """
 
         print("Creating LSTM model")
-        init = keras.initializers.glorot_uniform(seed=1)
+        init = tf.keras.initializers.glorot_uniform(seed=1)
         optimizer = self.optimizer
 
         # TODO input_dim is kludged, MUST FIX - should be able to trim embedding matrix in embed_glove.py
 
-        self.classifier = keras.models.Sequential()
+        self.classifier = tf.keras.models.Sequential()
 
-        self.classifier.add(keras.layers.embeddings.Embedding(input_dim=len(self.word_index) + 1,
+        self.classifier.add(tf.keras.layers.embeddings.Embedding(input_dim=len(self.word_index) + 1,
                                                               output_dim=self.embed_vec_len,
                                                               input_length=self.max_length,
                                                               mask_zero=True, trainable=False,
                                                               embeddings_initializer=keras.initializers.Constant(
                                                                   self.embedding_matrix)))
-        self.classifier.add(keras.layers.SpatialDropout1D(dropout))
-        self.classifier.add(keras.layers.LSTM(units=neurons, input_shape=(self.max_length, self.embed_vec_len),
+        self.classifier.add(tf.keras.layers.SpatialDropout1D(dropout))
+        self.classifier.add(tf.keras.layers.LSTM(units=neurons, input_shape=(self.max_length, self.embed_vec_len),
                                               kernel_initializer=init, dropout=dropout,
                                               recurrent_dropout=rec_dropout))
-        self.classifier.add(keras.layers.Dense(units=1, kernel_initializer=init, activation=activ))
+        self.classifier.add(tf.keras.layers.Dense(units=1, kernel_initializer=init, activation=activ))
         self.classifier.compile(loss=costfunction, optimizer=optimizer, metrics=['acc'])
         print(self.classifier.summary())
 
@@ -430,7 +430,7 @@ class GloVE_Model(Classifier):
         es = []
         if self.early_stopping:
             es.append(
-                keras.callbacks.EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=self.patience))
+                tf.keras.callbacks.EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=self.patience))
         print('Fitting GloVE model')
 
         history = self.classifier.fit(X, y, validation_split=self.validation_split, batch_size=self.batch_size,
@@ -476,7 +476,7 @@ class GloVE_Model(Classifier):
         es = []
         if self.early_stopping:
             es.append(
-                keras.callbacks.EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=self.patience))
+                tf.keras.callbacks.EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=self.patience))
 
         history = self.classifier.fit(X, y, validation_split=self.validation_split, callbacks=es,
                                       batch_size=self.batch_size, sample_weight=weights,
@@ -499,7 +499,6 @@ class GloVE_Model(Classifier):
         :param data: (List of Strings) Input tweets
         :return: (Vector of Float) Predictions
         """
-        from keras.preprocessing.sequence import pad_sequences
         if self.tokenizer is None:
             raise ValueError('Model has not been trained!')
 

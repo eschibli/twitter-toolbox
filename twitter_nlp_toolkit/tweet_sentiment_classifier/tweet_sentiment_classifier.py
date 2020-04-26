@@ -1,9 +1,13 @@
 import json
 import os
-
 import numpy as np
-from sklearn.metrics import accuracy_score
+import spacy
+import dload
 
+from sklearn.metrics import accuracy_score
+from zipfile import ZipFile
+
+from twitter_nlp_toolkit.file_fetcher import file_fetcher
 
 # Urgent TODO tokenizer_filter appears to hang when a tweet contains a a single unprocessable word - confirm and fix
 # Urgent TODO fitting tokenizer appears to be bugged when preprocess=False. Confirm and apply fix of casting train_data
@@ -22,8 +26,6 @@ def tokenizer_filter(text, remove_punctuation=True, remove_stopwords=True, lemma
     :param lemmatize_pronouns: (bool) lemmatize pronouns to -PRON-
     :return: (list) tokenized and processed text
     """
-    import spacy
-    nlp = spacy.load("en_core_web_sm")
 
     """
     Define filter
@@ -82,8 +84,9 @@ def tokenizer_filter(text, remove_punctuation=True, remove_stopwords=True, lemma
         if verbose: print('\r Preprocessed %d tweets' % count)
         return filtered_tokens
 
+
 class SentimentAnalyzer:
-    def __init__(self, models=[], model_path='.Models'):
+    def __init__(self, models=[], model_path=None):
         """
         Constructor for SentimentAnalyzer module
         :param models: (list) Models to initialize. Should be a list of tuples formatted like (name, type, params)
@@ -91,6 +94,9 @@ class SentimentAnalyzer:
         """
         self.models = {}
         self.model_path = model_path
+
+        if self.model_path is None:
+            self.model_path = '.models'
 
         for name, type, params in models:
             if type == 'bow':
@@ -101,6 +107,23 @@ class SentimentAnalyzer:
                 self.add_glove_model(name, **params)
             else:
                 print('Model type %s not recognized' % type)
+
+    def load_small_ensemble(self, **kwargs):
+        # TODO improve model choice
+        # small_ensemble = ['glove_25N_1M_weighted_50d_1', 'glove_25N_1M_weighted_50d_2', 'glove_25N_1M_weighted_50d_3']
+        try:
+            self.load_models(path=self.model_path + '/small_ensemble', **kwargs)
+            assert (len(self.models) > 2)
+        except (AssertionError, FileNotFoundError, NotADirectoryError):
+            print('Downloading ensemble')
+            # Compressed model
+            self.download_small_ensemble()
+            self.load_models(path=self.model_path + '/small_ensemble', **kwargs)
+
+    def download_small_ensemble(self, **kwargs):
+        file_fetcher.download_file("https://www.dropbox.com/s/ave5cmw6imhi74q/small_ensemble.zip?dl=1", "small_ensemble.zip")
+        with ZipFile('small_ensemble.zip', 'r') as zipObj:
+            zipObj.extractall(path=self.model_path + '/small_ensemble')
 
     def add_model(self, model, name, **kwargs):
         """
@@ -294,8 +317,7 @@ class SentimentAnalyzer:
 
     def load_model(self, filename, path):
         """
-            # TODO Make IO failure more graceful
-
+        # TODO Make IO failure more graceful
         # TODO this is ugly, consider refactoring
         :param filename:
         :return:
@@ -321,52 +343,7 @@ class SentimentAnalyzer:
 
             print('Trying %s' % path + '/' + filename)
 
-            if os.path.exists(path + '/' + filename + '/bow_param.json'):
-                try:
-                    from .models.bow_models import BoW_Model
-                    print('Loading BoW model {} from legacy parameter file'.format(filename))
-                    with open(path + '/' + filename + '/bow_param.json', 'r') as infile:
-                        bow_param = json.load(infile)
-                    self.models[filename] = BoW_Model(**bow_param)
-                    self.models[filename].load_model(path + '/' +filename)
-                    print('BoW model %s loaded successfully' % filename)
-                except FileNotFoundError:
-                    print('Model %s not found' % filename)
-                except (IOError, EOFError):
-                    print('Problem reading %s files' % filename)
-
-            elif os.path.exists(path + '/' + filename + '/lstm_param.json'):
-                try:
-                    from .models.lstm_models import LSTM_Model
-                    print('Loading LSTM model {} from legacy parameter file'.format(filename))
-                    with open(path + '/' + filename + '/lstm_param.json', 'r') as infile:
-                        lstm_param = json.load(infile)
-                    self.models[filename] = LSTM_Model(**lstm_param)
-                    self.models[filename].load_model(path + '/' + filename)
-                    print('LSTM model %s loaded successfully' % filename)
-
-                except FileNotFoundError:
-                    print('Model %s not found' % filename)
-                except (IOError, EOFError):
-                    print('Problem reading %s files' % filename)
-
-            elif os.path.exists(path + '/' + filename + '/glove_param.json'):
-            #elif True:
-                try:
-                    from .models.lstm_models import GloVE_Model
-                    print('Loading GloVE model {} from legacy parameter file'.format(filename))
-                    glove_param = json.load(open(path + '/' + filename + '/glove_param.json', 'r'))
-                    self.models[filename] = GloVE_Model(None, **glove_param)
-                    self.models[filename].load_model(path + '/' +filename)
-
-                    print('Pre-trained embedding model %s loaded successfully' % filename)
-                except FileNotFoundError:
-                    print('Model %s not found' % filename)
-                except (IOError, EOFError):
-                    print('Problem reading %s files' % filename)
-
-            else:
-                print('Folder {} does not appear to be a saved model...'.format(filename))
+            self.load_legacy_model(filename, path)
 
     def evaluate(self, X, y, metric=accuracy_score):
         """
@@ -388,13 +365,60 @@ class SentimentAnalyzer:
             scores['ensembled'] = metric(y, self.predict(X))
         return scores
 
+    def load_legacy_model(self, filename, path):
+        if os.path.exists(path + '/' + filename + '/bow_param.json'):
+            try:
+                from .models.bow_models import BoW_Model
+                print('Loading BoW model {} from legacy parameter file'.format(filename))
+                with open(path + '/' + filename + '/bow_param.json', 'r') as infile:
+                    bow_param = json.load(infile)
+                self.models[filename] = BoW_Model(**bow_param)
+                self.models[filename].load_model(path + '/' + filename)
+                print('BoW model %s loaded successfully' % filename)
+            except FileNotFoundError:
+                print('Model %s not found' % filename)
+            except (IOError, EOFError):
+                print('Problem reading %s files' % filename)
+
+        elif os.path.exists(path + '/' + filename + '/lstm_param.json'):
+            try:
+                from .models.lstm_models import LSTM_Model
+                print('Loading LSTM model {} from legacy parameter file'.format(filename))
+                with open(path + '/' + filename + '/lstm_param.json', 'r') as infile:
+                    lstm_param = json.load(infile)
+                self.models[filename] = LSTM_Model(**lstm_param)
+                self.models[filename].load_model(path + '/' + filename)
+                print('LSTM model %s loaded successfully' % filename)
+
+            except FileNotFoundError:
+                print('Model %s not found' % filename)
+            except (IOError, EOFError):
+                print('Problem reading %s files' % filename)
+
+        elif os.path.exists(path + '/' + filename + '/glove_param.json'):
+            # elif True:
+            try:
+                from .models.lstm_models import GloVE_Model
+                print('Loading GloVE model {} from legacy parameter file'.format(filename))
+                glove_param = json.load(open(path + '/' + filename + '/glove_param.json', 'r'))
+                self.models[filename] = GloVE_Model(None, **glove_param)
+                self.models[filename].load_model(path + '/' + filename)
+
+                print('Pre-trained embedding model %s loaded successfully' % filename)
+            except FileNotFoundError:
+                print('Model %s not found' % filename)
+            except (IOError, EOFError):
+                print('Problem reading %s files' % filename)
+
+        else:
+            print('Folder {} does not appear to be a saved model...'.format(filename))
+
 
 class Classifier:
     """
     Parent Classifier class
     # TODO move redundant code here
     """
+
     def __init__(self):
         pass
-
-
