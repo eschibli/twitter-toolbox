@@ -60,8 +60,8 @@ def get_ids(tokens, tokenizer, max_seq_len):
 class BERT_Model(Classifier):
     def __init__(self, model="bert_en_uncased_L-12_H-768_A-12/1", max_length=25, patience=5, early_stopping=True,
                  validation_split=0.2, max_iter=50, bootstrap=1,
-                 batch_size=32, accuracy=0, activ='hard_sigmoid', optimizer=tf.keras.optimizers.Adam(),
-                 learning_rate=1E-3, finetune_embeddings=True, **kwargs):
+                 batch_size=32, accuracy=0, activ='sigmoid', optimizer=tf.keras.optimizers.Adam(),
+                 learning_rate=1E-4, finetune_embeddings=True, **kwargs):
         self.type = 'BERT_Model'
         self.package = 'twitter_nlp_toolkit.tweet_sentiment_classifier.models.bert_models'
         self.model = model
