@@ -143,34 +143,53 @@ class SentimentAnalyzer:
     def add_bow_model(self, name, **kwargs):
         """
         Add another BoW model to the classifier
-        :param name: (String) A name to refer to the model
-        :param kwargs: Model keywords
-        # TODO Deprecate
-        :return:
+        :param vocab_size: (int) Maximum vocabulary size. Default 1E6
+        :param max_iter: (int) Maximum number of fit iterations
+        :param remove_punctuation: (Bool) Remove punctuation. Recommended.
+        :param remove_stopwords: (Bool) Remove stopwords. Recommended.
+        :param lemmatize: (Bool) Lemmatize words. Recommended.
         """
+        from .models.bow_models import BoW_Model
+
         self.models[name] = BoW_Model(**kwargs)
 
     def add_lstm_model(self, name, **kwargs):
         """
         Add another LSTM model to the classifier
-        :param name: (String) A name to refer to the model
-        :param kwargs: Model keywords
-        # TODO Deprecate
-        :return:
+        :param max_length: (int) Maximum text length, ie, number of temporal nodes. Default 25
+        :param vocab_size: (int) Maximum vocabulary size. Default 1E7
+        :param max_iter: (int) Number of training epochs. Default 100
+        :param neurons: (int) Depth (NOT LENGTH) of LSTM network. Default 100
+        :param dropout: (float) Dropout
+        :param activ: (String) Activation function (for visible layer). Default 'hard_sigmoid'
+        :param optimizer: (String) Optimizer. Default 'adam'
         """
+        from .models.lstm_models import LSTM_Model
+
         self.models[name] = LSTM_Model(**kwargs)
 
-    def add_glove_model(self, name, glove_index, **kwargs):
+    def add_glove_model(self, name, glove_index=None, **kwargs):
         """
-        Add another lstm model with pre-trained embeddings to the classifier
-        :param name: (String) A name to refer to the model
-        :param glove_index: (dict) The embedding dictionary
-        :param kwargs: Model keywords
-        # TODO Deprecate
+        Add another lstm model with pre-trained embeddings to the classifier.
+        :param glove_index: (Dict) Embedding index to use. IF not provided, a standard one will be downloaded
+        :param name: (String) Name of model
+        :param embed_vec_len: (int) Embedding depth. Inferred from dictionary if provided. Otherwise 25, 50, 100, and
+        are acceptible values. 200
+        :param embedding_dict: (dict) Embedding dictionary
+        :param max_length: (int) Maximum text length, ie, number of temporal nodes. Default 25
+        :param vocab_size: (int) Maximum vocabulary size. Default 1E7
+        :param max_iter: (int) Number of training epochs. Default 100
+        :param neurons: (int) Depth (NOT LENGTH) of LSTM network. Default 100
+        :param dropout: (float) Dropout
+        :param activ: (String) Activation function (for visible layer). Default 'hard_sigmoid'
+        :param optimizer: (String) Optimizer. Default 'adam'
+        :param early_stopping: (bool) Train with early stopping
+        :param validation_split: (float) Fraction of training data to withold for validation
+        :param patience: (int) Number of epochs to wait before early stopping
+        """
+        from .models.lstm_models import GloVE_Model
 
-        :return:
-        """
-        self.models[name] = GloVE_Model(glove_index, **kwargs)
+        self.models[name] = GloVE_Model(glove_index=glove_index, **kwargs)
 
     def delete_models(self, models):
         """
@@ -206,7 +225,7 @@ class SentimentAnalyzer:
                 print('Deleting model %s' % name)
                 self.delete_model(name)
 
-    def fit(self, X, y, models=None, weights=None, custom_vocabulary=None, preprocess=True):
+    def fit(self, X, y, models=None, weights=None, custom_vocabulary=None, preprocess=True, **kwargs):
         """
         Fits the enabled models onto X. Note that this rebuilds the models, as it is not currently possible to update
         the tokenizers
@@ -228,8 +247,7 @@ class SentimentAnalyzer:
         for name in models:
             try:
                 print('Fitting %s' % name)
-                self.models[name].fit(X, y, weights=weights, custom_vocabulary=custom_vocabulary,
-                                      preprocess=preprocess)
+                self.models[name].fit(X, y, weights=weights, custom_vocabulary=custom_vocabulary)
             except KeyError:
                 print('Model %s not found!' % name)
 
@@ -239,7 +257,7 @@ class SentimentAnalyzer:
         improve the vocabulary
         :param X: (array) Feature matrix
         :param y: (vector) Targets
-        :param boostrap: (bool) Bootstrap sample the refining data. Default True.
+        :param bootstrap: (bool) Bootstrap sample the refining data. Default True.
         """
 
         for model in self.models.values():

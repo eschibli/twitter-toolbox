@@ -1,3 +1,6 @@
+from zipfile import ZipFile
+
+from twitter_nlp_toolkit.file_fetcher import file_fetcher
 from ..tweet_sentiment_classifier import Classifier, tokenizer_filter
 
 import os
@@ -280,13 +283,17 @@ class GloVE_Model(Classifier):
     # TODO add automatic embedding downloading and unzipping
     """
 
-    def __init__(self, embedding_dict=None, max_length=25, vocab_size=1000000, batch_size=10000, neurons=100,
+    def __init__(self, embedding_dict=None, embed_vec_len=200, max_length=25, vocab_size=1000000, batch_size=10000, neurons=100,
                  dropout=0.2, bootstrap=1, early_stopping=True, validation_split=0.2, patience=50, max_iter=250,
                  rec_dropout=0.2, activ='hard_sigmoid', optimizer='adam', accuracy=0, remove_punctuation=False,
                  remove_stopwords=False, lemmatize=True, **kwargs):
         """
         Constructor for LSTM classifier using pre-trained embeddings
         Be sure to add extra parameters to export()
+        :param glove_index: (Dict) Embedding index to use. IF not provided, a standard one will be downloaded
+        :param name: (String) Name of model
+        :param embed_vec_len: (int) Embedding depth. Inferred from dictionary if provided. Otherwise 25, 50, 100, and
+        are acceptible values. 200
         :param embedding_dict: (dict) Embedding dictionary
         :param max_length: (int) Maximum text length, ie, number of temporal nodes. Default 25
         :param vocab_size: (int) Maximum vocabulary size. Default 1E7
@@ -298,7 +305,6 @@ class GloVE_Model(Classifier):
         :param early_stopping: (bool) Train with early stopping
         :param validation_split: (float) Fraction of training data to withold for validation
         :param patience: (int) Number of epochs to wait before early stopping
-
         """
         self.type = 'GloVE_Model'
         self.package = 'twitter_nlp_toolkit.tweet_sentiment_classifier.models.lstm_models'
@@ -307,6 +313,7 @@ class GloVE_Model(Classifier):
         self.validation_split = validation_split
         self.patience = patience
         self.max_iter = max_iter
+        self.embed_vec_len = embed_vec_len
 
         self.max_length = max_length
         self.embedding_dict = embedding_dict
@@ -332,6 +339,7 @@ class GloVE_Model(Classifier):
 
         if self.embedding_dict is not None:
             self.embed_vec_len = len(list(self.embedding_dict.values())[0])
+            print('Setting embedding depth to {}'.format(self.embed_vec_len))
 
     def fit(self, train_data, y, weights=None, custom_vocabulary=None, clear_embedding_dictionary=True):
         """
@@ -347,7 +355,31 @@ class GloVE_Model(Classifier):
         """
         # Preprocess and tokenize text
         """
+        if self.embedding_dict is None:
+            print('Reloading embedding index')
+            try:
+                self.embedding_dict = {}
+                with open('.glove_dicts/glove.twitter.27B.' + str(self.embed_vec_len) + 'd.txt', encoding="utf8") as f:
+                    for line in f:
+                        word, representation = line.split(maxsplit=1)
+                        representation = np.fromstring(representation, 'f', sep=' ')
+                        self.embedding_dict[word] = representation
 
+                print('Dictionary loaded')
+
+            except FileNotFoundError:
+                file_fetcher.download_file("http://nlp.stanford.edu/data/glove.twitter.27B.zip",
+                                           "glove_dicts.zip")
+                with ZipFile('glove_dicts.zip', 'r') as zipObj:
+                    zipObj.extractall(path='/.glove_dicts')
+                self.embedding_dict = {}
+                with open('.glove_dicts/glove.twitter.27B.' + str(self.embed_vec_len) + 'd.txt', encoding="utf8") as f:
+                    for line in f:
+                        word, representation = line.split(maxsplit=1)
+                        representation = np.fromstring(representation, 'f', sep=' ')
+                        self.embedding_dict[word] = representation
+
+                print('Dictionary loaded')
 
         if weights is None:
             weights = np.ones(len(y))
