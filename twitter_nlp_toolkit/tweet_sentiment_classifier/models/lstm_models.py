@@ -330,7 +330,6 @@ class GloVE_Model(Classifier):
         self.remove_stopwords = remove_stopwords
         self.lemmatize = lemmatize
 
-        self.embed_vec_len = None
         self.tokenizer = None
         self.classifier = None
         self.word_index = None
@@ -359,7 +358,7 @@ class GloVE_Model(Classifier):
             print('Reloading embedding index')
             try:
                 self.embedding_dict = {}
-                with open('.glove_dicts/glove.twitter.27B.' + str(self.embed_vec_len) + 'd.txt', encoding="utf8") as f:
+                with open('/.glove_dicts/glove.twitter.27B.' + str(self.embed_vec_len) + 'd.txt', encoding="utf8") as f:
                     for line in f:
                         word, representation = line.split(maxsplit=1)
                         representation = np.fromstring(representation, 'f', sep=' ')
@@ -373,7 +372,7 @@ class GloVE_Model(Classifier):
                 with ZipFile('glove_dicts.zip', 'r') as zipObj:
                     zipObj.extractall(path='/.glove_dicts')
                 self.embedding_dict = {}
-                with open('.glove_dicts/glove.twitter.27B.' + str(self.embed_vec_len) + 'd.txt', encoding="utf8") as f:
+                with open('/.glove_dicts/glove.twitter.27B.' + str(self.embed_vec_len) + 'd.txt', encoding="utf8") as f:
                     for line in f:
                         word, representation = line.split(maxsplit=1)
                         representation = np.fromstring(representation, 'f', sep=' ')
