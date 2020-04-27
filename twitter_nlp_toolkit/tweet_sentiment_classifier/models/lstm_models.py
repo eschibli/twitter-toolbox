@@ -206,7 +206,6 @@ class LSTM_Model(Classifier):
         :param data:  (list of Strings) Tweets
         :return: (vector) Predictions
         """
-        from tf.keras.preprocessing.sequence import pad_sequences
         if self.tokenizer is None:
             raise ValueError('Model has not been trained!')
 

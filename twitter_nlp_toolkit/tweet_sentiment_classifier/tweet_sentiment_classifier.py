@@ -2,7 +2,6 @@ import json
 import os
 import numpy as np
 import spacy
-import dload
 
 from sklearn.metrics import accuracy_score
 from zipfile import ZipFile
@@ -15,6 +14,7 @@ from twitter_nlp_toolkit.file_fetcher import file_fetcher
 # Possible TODO consider renaming glove to pre-trained as it in principle should work with any pre-trained index
 # Possible TODO find way to limit learning rate when refining BoW model
 # Possible TODO set up Model/submodel inheritance
+
 
 def tokenizer_filter(text, remove_punctuation=True, remove_stopwords=True, lemmatize=True, lemmatize_pronouns=False,
                      verbose=True):
@@ -325,24 +325,28 @@ class SentimentAnalyzer:
 
         if filenames is not None:
             for filename in filenames:
-                self.load_model(path + '/' + filename)
+                self.load_model(filename, path)
 
         if filenames is None:
             filenames = [folder.name for folder in os.scandir(path) if folder.is_dir()]
             for filename in filenames:
-                print(filename)
                 self.load_model(filename, path)
 
-    def load_model(self, filename, path):
+    def load_model(self, filename, path=None):
         """
         # TODO Make IO failure more graceful
         # TODO this is ugly, consider refactoring
         :param filename:
         :return:
         """
+
+        if path is None:
+            path = self.model_path
+
         try:
             with open(path + '/' + filename + '/param.json') as infile:
                 import importlib
+                print('Model {} loading...'.format(filename))
                 param = json.load(infile)
                 module_name = param.pop('package')
                 constructor_name = param.pop('Classifier')
@@ -352,12 +356,16 @@ class SentimentAnalyzer:
                 self.models[filename].load_model(path + '/' + filename)
                 print('Model {} loaded'.format(filename))
 
+
+        except ModuleNotFoundError:
+            print('Module not found - are you sure it is imported?')
+
         except (FileNotFoundError, IOError, EOFError):
             try:
                 self.models.pop(filename)
                 print('Model {} failed to load completely...'.format(filename))
             except KeyError:
-                print('Default parameters file not found or not working...')
+                print('Default parameters file %s not found or not working...' % (path + '/' + filename))
 
             print('Trying %s' % path + '/' + filename)
 
