@@ -5,6 +5,5 @@ numpy
 ftfy
 tweepy
 dload
-en_core_web_sm
 tqdm
 requests
