@@ -4,6 +4,5 @@ pandas
 numpy
 ftfy
 tweepy
-dload
 tqdm
 requests
