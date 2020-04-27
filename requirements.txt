@@ -6,3 +6,4 @@ ftfy
 tweepy
 tqdm
 requests
+spacy
