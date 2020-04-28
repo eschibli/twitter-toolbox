@@ -3,6 +3,8 @@
 
 A suite of tools for collecting, pre-processing, analyzing and sentiment-scoring twitter data.
 
+Install: pip install twitter-nlp-toolkit
+
 Developers:
 * Moe Antar (@Moe520) 
     * Twitter json parser and formatter
