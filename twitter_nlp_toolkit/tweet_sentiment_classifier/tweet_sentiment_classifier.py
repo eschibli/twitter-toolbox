@@ -30,7 +30,12 @@ def tokenizer_filter(text, remove_punctuation=True, remove_stopwords=True, lemma
     """
     Define filter
     """
-    nlp = spacy.load("en_core_web_sm", disable=['textcat', "parser", 'ner', 'entity_linker'])
+
+    try:
+        nlp = spacy.load("en_core_web_sm", disable=['textcat', "parser", 'ner', 'entity_linker'])
+    except:
+        print('Error loading Spacy model. Please run "python -m spacy download en_core_web_sm" to load the model.')
+        raise OSError
     docs = list(text)
     filtered_tokens = []
     if remove_stopwords and remove_punctuation:
@@ -124,6 +129,24 @@ class SentimentAnalyzer:
         file_fetcher.download_file("https://www.dropbox.com/s/ave5cmw6imhi74q/small_ensemble.zip?dl=1", "small_ensemble.zip")
         with ZipFile('small_ensemble.zip', 'r') as zipObj:
             zipObj.extractall(path=self.model_path + '/small_ensemble')
+
+    def download_large_ensemble(self, **kwargs):
+        file_fetcher.download_file("https://www.dropbox.com/s/de9akeape9fvjzg/large_ensemble.zip?dl=1", "large_ensemble.zip")
+        with ZipFile('large_ensemble.zip', 'r') as zipObj:
+            zipObj.extractall(path=self.model_path + '/small_ensemble')
+
+    def load_large_ensemble(self, **kwargs):
+        # TODO improve model choice
+        print('Caution - the large ensemble is very resource-intensive and is currently experimental')
+
+        try:
+            self.load_models(path=self.model_path + '/large_ensemble', **kwargs)
+            assert (len(self.models) > 2)
+        except (AssertionError, FileNotFoundError, NotADirectoryError):
+            print('Downloading ensemble')
+            # Compressed model
+            self.download_large_ensemble()
+            self.load_models(path=self.model_path + '/large_ensemble', **kwargs)
 
     def add_model(self, model, name, **kwargs):
         """
