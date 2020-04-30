@@ -20,3 +20,4 @@ test.json
 *.idea
 keys.key
 push_to_pypi.bat
+*.idea

@@ -88,8 +88,8 @@ class TwitterStreamListener(tweepy.StreamListener):
                 self.c_exit(7)
             except:
                 print("\n\tListening function: Termination Caused by Unknown Error...")
-                print("\tWill attempt restart after ", str(30*connections_in_last_15_minutes), " seconds")
-                for s in range(30*connections_in_last_15_minutes):
+                print("\tWill attempt restart after ", str(30 * connections_in_last_15_minutes), " seconds")
+                for s in range(30 * connections_in_last_15_minutes):
                     print("\t" + "\r" + str(s), '')
                     time.sleep(1)
 
@@ -120,24 +120,24 @@ class TwitterStreamListener(tweepy.StreamListener):
         if self.num_tweets % self.notification_interval == 0:
             print("\t" + str(self.num_tweets) + " tweets collected...", end="\r")
 
-            # Increment the number of tweets collected by the number of tweets received
-            self.num_tweets += 1
+        # Increment the number of tweets collected by the number of tweets received
+        self.num_tweets += 1
 
-            # This is the main script that collects the tweets
-            # It will terminate when it hits the tweets limit
-            if (self.num_tweets < self.tweet_limit):
-                try:
-                    with open('%s' % self.file_label, 'a') as f:
-                        f.write(data)
-                except KeyboardInterrupt:
-                    print("Keyboard Interrupt: Ending Stream")
-                except BaseException as e:
-                    print(str(e))
-                return True
-            else:
-                print("Tweet Limit Reached: (%d) .... Closing Stream " % self.num_tweets)
-                self.num_tweets = 0
-                return False
+        # This is the main script that collects the tweets
+        # It will terminate when it hits the tweets limit
+        if (self.num_tweets < self.tweet_limit):
+            try:
+                with open('%s' % self.file_label, 'a') as f:
+                    f.write(data)
+            except KeyboardInterrupt:
+                print("Keyboard Interrupt: Ending Stream")
+            except BaseException as e:
+                print(str(e))
+            return True
+        else:
+            print("Tweet Limit Reached: (%d) .... Closing Stream " % self.num_tweets)
+            self.num_tweets = 0
+            return False
 
     def on_error(self, status):
         print(status)
