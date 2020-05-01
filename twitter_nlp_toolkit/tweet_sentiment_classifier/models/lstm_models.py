@@ -123,11 +123,11 @@ class LSTM_Model(Classifier):
 
         self.classifier = tf.keras.models.Sequential()
 
-        self.classifier.add(tf.keras.layers.embeddings.Embedding(input_dim=len(self.word_index) + 1,
+        self.classifier.add(tf.keras.layers.Embedding(input_dim=len(self.word_index) + 1,
                                                               output_dim=self.embed_vec_len,
                                                               input_length=self.max_length,
                                                               mask_zero=True,
-                                                              embeddings_initializer=keras.initializers.glorot_normal(
+                                                              embeddings_initializer=tf.keras.initializers.glorot_normal(
                                                                   seed=None)))
         self.classifier.add(tf.keras.layers.SpatialDropout1D(dropout))
         self.classifier.add(tf.keras.layers.LSTM(units=neurons, input_shape=(self.max_length, self.embed_vec_len),
