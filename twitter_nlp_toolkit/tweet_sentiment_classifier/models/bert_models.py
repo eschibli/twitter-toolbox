@@ -58,10 +58,10 @@ def get_ids(tokens, tokenizer, max_seq_len):
 
 
 class BERT_Model(Classifier):
-    def __init__(self, model="bert_en_uncased_L-12_H-768_A-12/1", max_length=25, patience=5, early_stopping=True,
-                 validation_split=0.2, max_iter=50, bootstrap=1,
-                 batch_size=32, accuracy=0, activ='sigmoid', optimizer=tf.keras.optimizers.Adam(),
-                 learning_rate=1E-4, finetune_embeddings=True, **kwargs):
+    def __init__(self, model="bert_en_uncased_L-12_H-768_A-12/1", max_length=48, patience=10, early_stopping=True,
+                 validation_split=0.2, max_iter=500, bootstrap=1,
+                 batch_size=32, accuracy=0, activ='sigmoid', optimizer=tf.keras.optimizers.Adam,
+                 learning_rate=1E-4, finetune_embeddings=True, steps_per_epoch=None, **kwargs):
         self.type = 'BERT_Model'
         self.package = 'twitter_nlp_toolkit.tweet_sentiment_classifier.models.bert_models'
         self.model = model
@@ -77,6 +77,7 @@ class BERT_Model(Classifier):
         self.optimzier = optimizer
         self.learning_rate = learning_rate
         self.finetune_embeddings = finetune_embeddings
+        self.steps_per_epoch = steps_per_epoch
 
         self.loss = 'binary_crossentropy'
 
@@ -97,13 +98,13 @@ class BERT_Model(Classifier):
         output_layer = tf.keras.layers.Dense(units=1, kernel_initializer=tf.keras.initializers.glorot_uniform(seed=1),
                                              activation=self.activ)(bert_model.outputs[0])
         self.classifier = tf.keras.Model(inputs=bert_model.inputs, outputs=output_layer)
-        self.classifier.compile(loss=self.loss, optimizer=self.optimzier, metrics=['acc'])
+        self.classifier.compile(loss=self.loss, optimizer=self.optimzier(learning_rate=self.learning_rate), metrics=['acc'])
 
         self.vocab_file = bert_layer.resolved_object.vocab_file.asset_path.numpy()
         do_lower_case = bert_layer.resolved_object.do_lower_case.numpy()
         self.tokenizer = FullTokenizer(self.vocab_file, do_lower_case)
 
-    def preprocess(self, tweets):
+    def preprocess(self, tweets, verbose=True):
         sequences = ([["[CLS]"] + self.tokenizer.tokenize(tweet) + ["[SEP]"] for tweet in tweets])
         input_ids = []
         input_masks = []
@@ -116,7 +117,7 @@ class BERT_Model(Classifier):
 
         for sequence in sequences:
             # TODO this is very slow, see if it can be sped up
-            if i % 100 == 0:
+            if verbose and i % 100 == 0:
                 print('\r Processing tweet {}'.format(i), end=' ')
 
             if len(sequence) > self.max_length:
@@ -151,20 +152,20 @@ class BERT_Model(Classifier):
 
         print('Fitting BERT classifier')
         history = self.classifier.fit(trainX, trainy, sample_weight=weights, epochs=self.max_iter, batch_size=self.batch_size,
-                                      verbose=1, validation_split=self.validation_split, callbacks=es)
+                                      verbose=2, validation_split=self.validation_split, callbacks=es,
+                                      steps_per_epoch=self.steps_per_epoch)
 
         self.accuracy = np.max(history.history['val_acc'])
         return history
 
-    def predict_proba(self, X, **kwargs):
+    def predict_proba(self, data, **kwargs):
 
-        X = self.preprocess(X)
-
+        X = self.preprocess(data, verbose=False)
         predictions = self.classifier.predict(X, **kwargs)
         return predictions
 
-    def predict(self, X, **kwargs):
-        predictions = self.predict_proba(X)
+    def predict(self, data, **kwargs):
+        predictions = self.predict_proba(data)
         return np.round(predictions, **kwargs)
 
     def export(self, filename):
