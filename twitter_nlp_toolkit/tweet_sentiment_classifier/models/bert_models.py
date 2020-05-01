@@ -231,5 +231,5 @@ class BERT_Model(Classifier):
 
         self.classifier.load_weights(filename + '/bert_model.h5')
         self.classifier.compile(loss='binary_crossentropy',
-                                optimizer=self.optimzier,
+                                optimizer=self.optimzier(learning_rate=self.learning_rate),
                                 metrics=['acc'])
