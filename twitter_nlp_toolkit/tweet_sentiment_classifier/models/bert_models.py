@@ -58,9 +58,9 @@ def get_ids(tokens, tokenizer, max_seq_len):
 
 
 class BERT_Model(Classifier):
-    def __init__(self, model="bert_en_uncased_L-12_H-768_A-12/1", max_length=25, patience=5, early_stopping=True,
-                 validation_split=0.2, max_iter=50, bootstrap=1,
-                 batch_size=32, accuracy=0, activ='sigmoid', optimizer=tf.keras.optimizers.Adam(),
+    def __init__(self, model="bert_en_uncased_L-12_H-768_A-12/1", max_length=48, patience=10, early_stopping=True,
+                 validation_split=0.2, max_iter=500, bootstrap=1,
+                 batch_size=32, accuracy=0, activ='sigmoid', optimizer=tf.keras.optimizers.Adam,
                  learning_rate=1E-4, finetune_embeddings=True, **kwargs):
         self.type = 'BERT_Model'
         self.package = 'twitter_nlp_toolkit.tweet_sentiment_classifier.models.bert_models'
@@ -97,13 +97,13 @@ class BERT_Model(Classifier):
         output_layer = tf.keras.layers.Dense(units=1, kernel_initializer=tf.keras.initializers.glorot_uniform(seed=1),
                                              activation=self.activ)(bert_model.outputs[0])
         self.classifier = tf.keras.Model(inputs=bert_model.inputs, outputs=output_layer)
-        self.classifier.compile(loss=self.loss, optimizer=self.optimzier, metrics=['acc'])
+        self.classifier.compile(loss=self.loss, optimizer=self.optimzier(learning_rate=self.learning_rate), metrics=['acc'])
 
         self.vocab_file = bert_layer.resolved_object.vocab_file.asset_path.numpy()
         do_lower_case = bert_layer.resolved_object.do_lower_case.numpy()
         self.tokenizer = FullTokenizer(self.vocab_file, do_lower_case)
 
-    def preprocess(self, tweets):
+    def preprocess(self, tweets, verbose=True):
         sequences = ([["[CLS]"] + self.tokenizer.tokenize(tweet) + ["[SEP]"] for tweet in tweets])
         input_ids = []
         input_masks = []
@@ -116,7 +116,7 @@ class BERT_Model(Classifier):
 
         for sequence in sequences:
             # TODO this is very slow, see if it can be sped up
-            if i % 100 == 0:
+            if verbose and i % 100 == 0:
                 print('\r Processing tweet {}'.format(i), end=' ')
 
             if len(sequence) > self.max_length:
@@ -156,6 +156,11 @@ class BERT_Model(Classifier):
         self.accuracy = np.max(history.history['val_acc'])
         return history
 
+    def predict_proba(self, data, **kwargs):
+        X = self.preprocess(data, verbose=False)
+        predictions = self.classifier.predict(X, **kwargs)
+        return predictions
+
     def refine(self, train_data, y, weights=None, bootstrap=True, **kwargs):
         if (bootstrap and 1 < self.bootstrap < len(y)):
             train_data, y, weights = resample(train_data, y, weights, n_samples=self.bootstrap, stratify=y,
@@ -176,21 +181,15 @@ class BERT_Model(Classifier):
                 tf.keras.callbacks.EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=self.patience))
 
         print('Fitting BERT classifier')
-        history = self.classifier.fit(trainX, trainy, sample_weight=weights, epochs=self.max_iter, batch_size=self.batch_size,
+        history = self.classifier.fit(trainX, trainy, sample_weight=weights, epochs=self.max_iter,
+                                      batch_size=self.batch_size,
                                       verbose=1, validation_split=self.validation_split, callbacks=es)
 
         self.accuracy = np.max(history.history['val_acc'])
         return history
 
-    def predict_proba(self, X, **kwargs):
-
-        X = self.preprocess(X)
-
-        predictions = self.classifier.predict(X, **kwargs)
-        return predictions
-
-    def predict(self, X, **kwargs):
-        predictions = self.predict_proba(X)
+    def predict(self, data, **kwargs):
+        predictions = self.predict_proba(data)
         return np.round(predictions, **kwargs)
 
     def export(self, filename):
@@ -210,7 +209,6 @@ class BERT_Model(Classifier):
                       'activ': self.activ,
                       'batch_size': self.batch_size,
                       'accuracy': float(self.accuracy),
-                      'gradient_clip': float(self.gradient_clip)
                       }
 
         if parameters['bootstrap'] < 1:

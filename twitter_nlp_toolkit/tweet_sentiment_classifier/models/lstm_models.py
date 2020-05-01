@@ -123,11 +123,11 @@ class LSTM_Model(Classifier):
 
         self.classifier = tf.keras.models.Sequential()
 
-        self.classifier.add(tf.keras.layers.embeddings.Embedding(input_dim=len(self.word_index) + 1,
+        self.classifier.add(tf.keras.layers.Embedding(input_dim=len(self.word_index) + 1,
                                                               output_dim=self.embed_vec_len,
                                                               input_length=self.max_length,
                                                               mask_zero=True,
-                                                              embeddings_initializer=keras.initializers.glorot_normal(
+                                                              embeddings_initializer=tf.keras.initializers.glorot_normal(
                                                                   seed=None)))
         self.classifier.add(tf.keras.layers.SpatialDropout1D(dropout))
         self.classifier.add(tf.keras.layers.LSTM(units=neurons, input_shape=(self.max_length, self.embed_vec_len),
@@ -145,7 +145,7 @@ class LSTM_Model(Classifier):
 
         history = self.classifier.fit(X, y, validation_split=self.validation_split, callbacks=es,
                                       batch_size=self.batch_size, sample_weight=weights,
-                                      epochs=self.max_iter, verbose=1)
+                                      epochs=self.max_iter, verbose=2)
 
         self.accuracy = np.max(history.history['val_acc'])
         return history
@@ -188,7 +188,7 @@ class LSTM_Model(Classifier):
 
         history = self.classifier.fit(X, y, validation_split=self.validation_split, callbacks=es,
                                       batch_size=self.batch_size, sample_weight=weights,
-                                      epochs=self.max_iter, verbose=1)
+                                      epochs=self.max_iter, verbose=2)
         self.accuracy = np.max(history.history['val_acc'])
         return history
 
@@ -438,11 +438,11 @@ class GloVE_Model(Classifier):
 
         self.classifier = tf.keras.models.Sequential()
 
-        self.classifier.add(tf.keras.layers.embeddings.Embedding(input_dim=len(self.word_index) + 1,
+        self.classifier.add(tf.keras.layers.Embedding(input_dim=len(self.word_index) + 1,
                                                               output_dim=self.embed_vec_len,
                                                               input_length=self.max_length,
                                                               mask_zero=True, trainable=False,
-                                                              embeddings_initializer=keras.initializers.Constant(
+                                                              embeddings_initializer=tf.keras.initializers.Constant(
                                                                   self.embedding_matrix)))
         self.classifier.add(tf.keras.layers.SpatialDropout1D(dropout))
         self.classifier.add(tf.keras.layers.LSTM(units=neurons, input_shape=(self.max_length, self.embed_vec_len),
@@ -464,7 +464,7 @@ class GloVE_Model(Classifier):
 
         history = self.classifier.fit(X, y, validation_split=self.validation_split, batch_size=self.batch_size,
                                       epochs=self.max_iter, sample_weight=weights,
-                                      callbacks=es, verbose=1)
+                                      callbacks=es, verbose=2)
 
         self.accuracy = np.max(history.history['val_acc'])
         return history
@@ -509,7 +509,7 @@ class GloVE_Model(Classifier):
 
         history = self.classifier.fit(X, y, validation_split=self.validation_split, callbacks=es,
                                       batch_size=self.batch_size, sample_weight=weights,
-                                      epochs=self.max_iter, verbose=1)
+                                      epochs=self.max_iter, verbose=2)
         self.accuracy = np.max(history.history['val_acc'])
         return history
 
