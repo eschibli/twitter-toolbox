@@ -133,7 +133,7 @@ class SentimentAnalyzer:
     def download_large_ensemble(self, **kwargs):
         file_fetcher.download_file("https://www.dropbox.com/s/de9akeape9fvjzg/large_ensemble.zip?dl=1", "large_ensemble.zip")
         with ZipFile('large_ensemble.zip', 'r') as zipObj:
-            zipObj.extractall(path=self.model_path + '/small_ensemble')
+            zipObj.extractall(path=self.model_path + '/large_ensemble')
 
     def load_large_ensemble(self, **kwargs):
         # TODO improve model choice

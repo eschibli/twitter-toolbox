@@ -156,6 +156,32 @@ class BERT_Model(Classifier):
         self.accuracy = np.max(history.history['val_acc'])
         return history
 
+    def refine(self, train_data, y, weights=None, bootstrap=True, **kwargs):
+        if (bootstrap and 1 < self.bootstrap < len(y)):
+            train_data, y, weights = resample(train_data, y, weights, n_samples=self.bootstrap, stratify=y,
+                                              replace=False)
+        elif (bootstrap and self.bootstrap < 1):
+            n_samples = int(self.bootstrap * len(y))
+            train_data, y, weights = resample(train_data, y, weights, n_samples=n_samples, stratify=y,
+                                              replace=False)
+
+        trainX = self.preprocess(train_data)
+        trainy = np.array(y)
+        if weights is None:
+            weights = np.ones(len(y))
+
+        es = []
+        if self.early_stopping:
+            es.append(
+                tf.keras.callbacks.EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=self.patience))
+
+        print('Fitting BERT classifier')
+        history = self.classifier.fit(trainX, trainy, sample_weight=weights, epochs=self.max_iter, batch_size=self.batch_size,
+                                      verbose=1, validation_split=self.validation_split, callbacks=es)
+
+        self.accuracy = np.max(history.history['val_acc'])
+        return history
+
     def predict_proba(self, X, **kwargs):
 
         X = self.preprocess(X)
@@ -184,6 +210,7 @@ class BERT_Model(Classifier):
                       'activ': self.activ,
                       'batch_size': self.batch_size,
                       'accuracy': float(self.accuracy),
+                      'gradient_clip': float(self.gradient_clip)
                       }
 
         if parameters['bootstrap'] < 1:

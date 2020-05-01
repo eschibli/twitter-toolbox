@@ -407,7 +407,6 @@ class GloVE_Model(Classifier):
             self.tokenizer = Tokenizer(num_words=self.vocab_size, char_level=False)
             self.tokenizer.fit_on_texts(cleaned_data)
 
-        print(cleaned_data)
         train_sequences = self.tokenizer.texts_to_sequences(cleaned_data)
 
         self.word_index = self.tokenizer.word_index
