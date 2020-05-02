@@ -285,7 +285,7 @@ class GloVE_Model(Classifier):
     def __init__(self, embedding_dict=None, embed_vec_len=200, max_length=25, vocab_size=1000000, batch_size=10000, neurons=100,
                  dropout=0.2, bootstrap=1, early_stopping=True, validation_split=0.2, patience=50, max_iter=250,
                  rec_dropout=0.2, activ='hard_sigmoid', optimizer='adam', accuracy=0, remove_punctuation=False,
-                 remove_stopwords=False, lemmatize=True, **kwargs):
+                 remove_stopwords=False, lemmatize=True, finetune_embeddings=False, **kwargs):
         """
         Constructor for LSTM classifier using pre-trained embeddings
         Be sure to add extra parameters to export()
@@ -314,6 +314,7 @@ class GloVE_Model(Classifier):
         self.max_iter = max_iter
         self.embed_vec_len = embed_vec_len
 
+        self.finetune_embeddings = finetune_embeddings
         self.max_length = max_length
         self.embedding_dict = embedding_dict
         self.max_iter = max_iter
@@ -442,7 +443,7 @@ class GloVE_Model(Classifier):
         self.classifier.add(tf.keras.layers.Embedding(input_dim=len(self.word_index) + 1,
                                                               output_dim=self.embed_vec_len,
                                                               input_length=self.max_length,
-                                                              mask_zero=True, trainable=False,
+                                                              mask_zero=True, trainable=self.finetune_embeddings,
                                                               embeddings_initializer=tf.keras.initializers.Constant(
                                                                   self.embedding_matrix)))
         self.classifier.add(tf.keras.layers.SpatialDropout1D(dropout))
@@ -564,7 +565,8 @@ class GloVE_Model(Classifier):
                       'accuracy': float(self.accuracy),
                       'remove_punctuation': self.remove_punctuation,
                       'remove_stopwords': self.remove_stopwords,
-                      'lemmatize': self.lemmatize
+                      'lemmatize': self.lemmatize,
+                      'finetune_embeddings': self.finetune_embeddings
                       }
 
         if parameters['bootstrap'] < 1:
