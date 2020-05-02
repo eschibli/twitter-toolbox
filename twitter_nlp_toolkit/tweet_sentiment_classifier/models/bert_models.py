@@ -61,7 +61,7 @@ class BERT_Model(Classifier):
     def __init__(self, model="bert_en_uncased_L-12_H-768_A-12/1", max_length=48, patience=10, early_stopping=True,
                  validation_split=0.2, max_iter=500, bootstrap=1,
                  batch_size=32, accuracy=0, activ='sigmoid', optimizer=tf.keras.optimizers.Adam,
-                 learning_rate=1E-4, finetune_embeddings=True, steps_per_epoch=None, **kwargs):
+                 learning_rate=1E-4, finetune_embeddings=True, **kwargs):
         self.type = 'BERT_Model'
         self.package = 'twitter_nlp_toolkit.tweet_sentiment_classifier.models.bert_models'
         self.model = model
@@ -77,7 +77,6 @@ class BERT_Model(Classifier):
         self.optimzier = optimizer
         self.learning_rate = learning_rate
         self.finetune_embeddings = finetune_embeddings
-        self.steps_per_epoch = steps_per_epoch
 
         self.loss = 'binary_crossentropy'
 
@@ -152,17 +151,42 @@ class BERT_Model(Classifier):
 
         print('Fitting BERT classifier')
         history = self.classifier.fit(trainX, trainy, sample_weight=weights, epochs=self.max_iter, batch_size=self.batch_size,
-                                      verbose=2, validation_split=self.validation_split, callbacks=es,
-                                      steps_per_epoch=self.steps_per_epoch)
+                                      verbose=1, validation_split=self.validation_split, callbacks=es)
 
         self.accuracy = np.max(history.history['val_acc'])
         return history
 
     def predict_proba(self, data, **kwargs):
-
         X = self.preprocess(data, verbose=False)
         predictions = self.classifier.predict(X, **kwargs)
         return predictions
+
+    def refine(self, train_data, y, weights=None, bootstrap=True, **kwargs):
+        if (bootstrap and 1 < self.bootstrap < len(y)):
+            train_data, y, weights = resample(train_data, y, weights, n_samples=self.bootstrap, stratify=y,
+                                              replace=False)
+        elif (bootstrap and self.bootstrap < 1):
+            n_samples = int(self.bootstrap * len(y))
+            train_data, y, weights = resample(train_data, y, weights, n_samples=n_samples, stratify=y,
+                                              replace=False)
+
+        trainX = self.preprocess(train_data)
+        trainy = np.array(y)
+        if weights is None:
+            weights = np.ones(len(y))
+
+        es = []
+        if self.early_stopping:
+            es.append(
+                tf.keras.callbacks.EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=self.patience))
+
+        print('Fitting BERT classifier')
+        history = self.classifier.fit(trainX, trainy, sample_weight=weights, epochs=self.max_iter,
+                                      batch_size=self.batch_size,
+                                      verbose=1, validation_split=self.validation_split, callbacks=es)
+
+        self.accuracy = np.max(history.history['val_acc'])
+        return history
 
     def predict(self, data, **kwargs):
         predictions = self.predict_proba(data)
@@ -207,5 +231,5 @@ class BERT_Model(Classifier):
 
         self.classifier.load_weights(filename + '/bert_model.h5')
         self.classifier.compile(loss='binary_crossentropy',
-                                optimizer=self.optimzier,
+                                optimizer=self.optimzier(learning_rate=self.learning_rate),
                                 metrics=['acc'])
