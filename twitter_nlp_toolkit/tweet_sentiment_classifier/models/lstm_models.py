@@ -14,17 +14,16 @@ from tensorflow.keras.preprocessing.sequence import pad_sequences
 from tensorflow.keras.preprocessing.text import Tokenizer
 from sklearn.utils import resample
 
-
 class LSTM_Model(Classifier):
     """
      LSTM model with trainable embedding layer"
     """
 
     def __init__(self, max_length=25, vocab_size=1000000, neurons=50,
-                 dropout=0.25, rec_dropout=0.25, embed_vec_len=200, activ='hard_sigmoid', optimizer='adam',
-                 bootstrap=1, early_stopping=True, patience=50, validation_split=0.2, max_iter=250,
+                 dropout=0.25, rec_dropout=0.25, embed_vec_len=200, activ='hard_sigmoid',
+                 learning_rate=0.001, bootstrap=1, early_stopping=True, patience=50, validation_split=0.2, max_iter=250,
                  batch_size=10000, accuracy=0, remove_punctuation=False, remove_stopwords=False, lemmatize=True,
-                 **kwargs):
+                 hidden_neurons=0, **kwargs):
         """
         Constructor for LSTM classifier using pre-trained embeddings
         Be sure to add additional parametesr to export()
@@ -43,17 +42,22 @@ class LSTM_Model(Classifier):
         self.validation_split = validation_split
         self.patience = patience
         self.max_iter = max_iter
+        self.learning_rate = learning_rate
 
         self.max_length = max_length
         self.max_iter = max_iter
         self.batch_size = batch_size
         self.vocab_size = vocab_size
         self.neurons = neurons
+        self.hidden_neurons = hidden_neurons
         self.dropout = dropout
         self.rec_dropout = rec_dropout
         self.activ = activ
-        self.optimizer = optimizer
+        self.optimizer = 'adam'
         self.embed_vec_len = embed_vec_len
+
+        self.embedding_initializer = tf.keras.initializers.glorot_normal(seed=None)
+        self.finetune_embeddings=True
 
         self.remove_punctuation = remove_punctuation
         self.remove_stopwords = remove_stopwords
@@ -63,19 +67,10 @@ class LSTM_Model(Classifier):
         self.classifier = None
         self.word_index = None
         self.embedding_matrix = None
+        self.es = []
         self.accuracy = accuracy
 
-    def fit(self, train_data, y, weights=None, custom_vocabulary=None):
-        """
-        :param train_data: (List-like of Strings) Tweets to fit on
-        :param y: (Vector) Targets
-        :param weights: (Vector) Weights for fitting data
-        :param custom_vocabulary: (List of String) Custom vocabulary to use for tokenizer. Not recommended.
-        :return: Fit history
-
-        # TODO preprocess custom_vocabulary the reduce memory usage
-        """
-
+    def preprocess(self, train_data, y, weights=None):
         if weights is None:
             weights = np.ones(len(y))
 
@@ -91,11 +86,25 @@ class LSTM_Model(Classifier):
             train_data, y, weights = resample(train_data, y, weights, n_samples=n_samples, stratify=y,
                                               replace=False)
 
-        filtered_data = tokenizer_filter(train_data, remove_punctuation=False, remove_stopwords=False,
-                                         lemmatize=True, verbose=True)
+        filtered_data = tokenizer_filter(train_data, remove_punctuation=self.remove_punctuation,
+                                         remove_stopwords=self.remove_punctuation, lemmatize_pronouns=True,
+                                         lemmatize=self.lemmatize, verbose=True)
         print('Filtered data')
 
         cleaned_data = [' '.join(tweet) for tweet in filtered_data]
+        return cleaned_data, y, weights
+
+    def fit(self, train_data, y, weights=None, custom_vocabulary=None):
+        """
+        :param train_data: (List-like of Strings) Tweets to fit on
+        :param y: (Vector) Targets
+        :param weights: (Vector) Weights for fitting data
+        :param custom_vocabulary: (List of String) Custom vocabulary to use for tokenizer. Not recommended.
+        :return: Fit history
+
+        """
+
+        cleaned_data, y, weights = self.preprocess(train_data, y, weights)
 
         self.tokenizer = Tokenizer(num_words=self.vocab_size, filters='"#$%&()*+-/:;<=>?@[\\]^_`{|}~\t\n')
         self.tokenizer.fit_on_texts(cleaned_data)
@@ -107,48 +116,45 @@ class LSTM_Model(Classifier):
 
         X = pad_sequences(train_sequences, maxlen=self.max_length, padding='pre')
 
-        neurons = self.neurons  # Depth (NOT LENGTH) of LSTM network
-        dropout = self.dropout  # Dropout - around 0.25 is probably best
-        rec_dropout = self.rec_dropout
-        activ = self.activ
-        costfunction = 'binary_crossentropy'
-
-        """
-        Create LSTM model
-        """
-
-        print("Creating LSTM model")
-        init = tf.keras.initializers.glorot_uniform(seed=1)
-        optimizer = self.optimizer
-
-        self.classifier = tf.keras.models.Sequential()
-
-        self.classifier.add(tf.keras.layers.Embedding(input_dim=len(self.word_index) + 1,
-                                                              output_dim=self.embed_vec_len,
-                                                              input_length=self.max_length,
-                                                              mask_zero=True,
-                                                              embeddings_initializer=tf.keras.initializers.glorot_normal(
-                                                                  seed=None)))
-        self.classifier.add(tf.keras.layers.SpatialDropout1D(dropout))
-        self.classifier.add(tf.keras.layers.LSTM(units=neurons, input_shape=(self.max_length, self.embed_vec_len),
-                                              kernel_initializer=init, dropout=dropout,
-                                              recurrent_dropout=rec_dropout))
-        self.classifier.add(tf.keras.layers.Dense(units=1, kernel_initializer=init, activation=activ))
-        self.classifier.compile(loss=costfunction, optimizer=optimizer, metrics=['acc'])
-        print(self.classifier.summary())
-        es = []
-        if self.early_stopping:
-            es.append(
-                tf.keras.callbacks.EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=self.patience))
+        self.build_LSTM_network()
 
         print('Fitting LSTM model')
 
-        history = self.classifier.fit(X, y, validation_split=self.validation_split, callbacks=es,
+        history = self.classifier.fit(X, y, validation_split=self.validation_split, callbacks=self.es,
                                       batch_size=self.batch_size, sample_weight=weights,
                                       epochs=self.max_iter, verbose=2)
 
         self.accuracy = np.max(history.history['val_acc'])
         return history
+
+    def build_LSTM_network(self):
+        print("Creating LSTM model")
+        if self.optimizer == 'adam':
+            self.optimizer = tf.keras.optimizers.Adam(learning_rate=self.learning_rate)
+
+        init = tf.keras.initializers.glorot_uniform(seed=1)
+
+        self.classifier = tf.keras.models.Sequential()
+
+        self.classifier.add(tf.keras.layers.Embedding(input_dim=len(self.word_index) + 1,
+                                                      output_dim=self.embed_vec_len,
+                                                      input_length=self.max_length,
+                                                      mask_zero=True,
+                                                      embeddings_initializer=self.embedding_initializer,
+                                                      trainable=self.finetune_embeddings))
+
+        self.classifier.add(tf.keras.layers.SpatialDropout1D(self.dropout))
+        self.classifier.add(tf.keras.layers.LSTM(units=self.neurons, input_shape=(self.max_length, self.embed_vec_len),
+                                                 kernel_initializer=init, dropout=self.dropout,
+                                                 recurrent_dropout=self.rec_dropout))
+        if self.hidden_neurons >0:
+            self.classifier.add(tf.keras.layers.Dense(units=self.hidden_neurons, kernel_initializer=init, activation='elu'))
+        self.classifier.add(tf.keras.layers.Dense(units=1, kernel_initializer=init, activation=self.activ))
+        self.classifier.compile(loss='binary_crossentropy', optimizer=self.optimizer, metrics=['acc'])
+        print(self.classifier.summary())
+        if self.early_stopping:
+            self.es.append(
+                tf.keras.callbacks.EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=self.patience))
 
     def refine(self, train_data, y, bootstrap=True, weights=None):
         """
@@ -186,7 +192,7 @@ class LSTM_Model(Classifier):
             es.append(
                 tf.keras.callbacks.EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=self.patience))
 
-        history = self.classifier.fit(X, y, validation_split=self.validation_split, callbacks=es,
+        history = self.classifier.fit(X, y, validation_split=self.validation_split, callbacks=self.es,
                                       batch_size=self.batch_size, sample_weight=weights,
                                       epochs=self.max_iter, verbose=2)
         self.accuracy = np.max(history.history['val_acc'])
@@ -232,17 +238,17 @@ class LSTM_Model(Classifier):
                       'max_iter': int(self.max_iter),
                       'max_length': int(self.max_length),
                       'neurons': int(self.neurons),
+                      'hidden_neruons': int(self.hidden_neurons),
                       'dropout': float(self.dropout),
                       'rec_dropout': float(self.rec_dropout),
                       'activ': self.activ,
-                      'optimizer': self.optimizer,
                       'vocab_size': self.vocab_size,
                       'batch_size': self.batch_size,
                       'accuracy': float(self.accuracy),
                       'remove_punctuation': self.remove_punctuation,
                       'remove_stopwords': self.remove_stopwords,
-                      'lemmatize': self.lemmatize
-
+                      'lemmatize': self.lemmatize,
+                      'learning_rate': self.learning_rate
                       }
 
         if parameters['bootstrap'] < 1:
@@ -276,15 +282,15 @@ class LSTM_Model(Classifier):
                                 metrics=['acc'])
 
 
-class GloVE_Model(Classifier):
+class GloVE_Model(LSTM_Model):
     """
     LSTM model that uses GloVE pre-trained embeddings
     # TODO add automatic embedding downloading and unzipping
     """
 
     def __init__(self, embedding_dict=None, embed_vec_len=200, max_length=25, vocab_size=1000000, batch_size=10000, neurons=100,
-                 dropout=0.2, bootstrap=1, early_stopping=True, validation_split=0.2, patience=50, max_iter=250,
-                 rec_dropout=0.2, activ='hard_sigmoid', optimizer='adam', accuracy=0, remove_punctuation=False,
+                 hidden_neurons=0, dropout=0.2, bootstrap=1, early_stopping=True, validation_split=0.2, patience=50, max_iter=250,
+                 rec_dropout=0.2, activ='hard_sigmoid', accuracy=0, remove_punctuation=False, learning_rate=0.001,
                  remove_stopwords=False, lemmatize=True, finetune_embeddings=False, **kwargs):
         """
         Constructor for LSTM classifier using pre-trained embeddings
@@ -313,6 +319,9 @@ class GloVE_Model(Classifier):
         self.patience = patience
         self.max_iter = max_iter
         self.embed_vec_len = embed_vec_len
+        self.learning_rate = learning_rate
+
+        self.embedding_initializer = None
 
         self.finetune_embeddings = finetune_embeddings
         self.max_length = max_length
@@ -320,15 +329,17 @@ class GloVE_Model(Classifier):
         self.max_iter = max_iter
         self.vocab_size = vocab_size
         self.neurons = neurons
+        self.hidden_neurons = hidden_neurons
         self.dropout = dropout
         self.rec_dropout = rec_dropout
         self.activ = activ
-        self.optimizer = optimizer
+        self.optimizer = 'adam'
         self.batch_size = batch_size
 
         self.remove_punctuation = remove_punctuation
         self.remove_stopwords = remove_stopwords
         self.lemmatize = lemmatize
+        self.es = []
 
         self.tokenizer = None
         self.classifier = None
@@ -340,20 +351,7 @@ class GloVE_Model(Classifier):
             self.embed_vec_len = len(list(self.embedding_dict.values())[0])
             print('Setting embedding depth to {}'.format(self.embed_vec_len))
 
-    def fit(self, train_data, y, weights=None, custom_vocabulary=None, clear_embedding_dictionary=True):
-        """
-        :param train_data: (Dataframe) Training data
-        :param y: (vector) Targets
-        :param weights: (vector) Weights for fitting data
-        :param custom_vocabulary: Custom vocabulary for the tokenizer. Not recommended.
-        :param clear_embedding_dictionary: Delete the embedding dictionary after loading the embedding layer.
-        Recommended, but will prevent the model from being re-fit (not refined)
-        :returns Fit history
-        """
-
-        """
-        # Preprocess and tokenize text
-        """
+    def preprocess(self, train_data, y, weights=None):
         if self.embedding_dict is None:
             print('Reloading embedding index')
             try:
@@ -391,13 +389,30 @@ class GloVE_Model(Classifier):
             train_data, y, weights = resample(train_data, y, weights, n_samples=n_samples, stratify=y,
                                               replace=False)
 
-        print('Sampled %d training points' % len(y))
+        print('Sampled %d training points' % len(train_data))
 
         filtered_data = tokenizer_filter(train_data, remove_punctuation=self.remove_punctuation,
-                                         remove_stopwords=self.remove_stopwords, lemmatize=self.lemmatize)
+                                         remove_stopwords=self.remove_stopwords, lemmatize=self.lemmatize, lemmatize_pronouns=False)
         print('Filtered data')
 
         cleaned_data = [' '.join(tweet) for tweet in filtered_data]
+        return cleaned_data, y, weights
+
+    def fit(self, train_data, y, weights=None, custom_vocabulary=None, clear_embedding_dictionary=True):
+        """
+        :param train_data: (Dataframe) Training data
+        :param y: (vector) Targets
+        :param weights: (vector) Weights for fitting data
+        :param custom_vocabulary: Custom vocabulary for the tokenizer. Not recommended.
+        :param clear_embedding_dictionary: Delete the embedding dictionary after loading the embedding layer.
+        Recommended, but will prevent the model from being re-fit (not refined)
+        :returns Fit history
+        """
+
+        """
+        # Preprocess and tokenize text
+        """
+        cleaned_data, y, weights = self.preprocess(train_data, y, weights)
 
         if custom_vocabulary is not None:
             print('Applying custom vocabulary')
@@ -421,124 +436,20 @@ class GloVE_Model(Classifier):
                 # words not found in embedding index will be all-zeros. # TODO consider optimizing
                 self.embedding_matrix[i] = embedding_vector
 
-        neurons = self.neurons  # Depth (NOT LENGTH) of LSTM network
-        dropout = self.dropout  # Dropout - around 0.25 is probably best
-        rec_dropout = self.rec_dropout
-        activ = self.activ
-        costfunction = 'binary_crossentropy'
-
-        """
-        Create LSTM model
-        """
-
-        print("Creating LSTM model")
-        init = tf.keras.initializers.glorot_uniform(seed=1)
-        optimizer = self.optimizer
-
-        # TODO input_dim is kludged, MUST FIX - should be able to trim embedding matrix in embed_glove.py
-
-        self.classifier = tf.keras.models.Sequential()
-
-        self.classifier.add(tf.keras.layers.Embedding(input_dim=len(self.word_index) + 1,
-                                                              output_dim=self.embed_vec_len,
-                                                              input_length=self.max_length,
-                                                              mask_zero=True, trainable=self.finetune_embeddings,
-                                                              embeddings_initializer=tf.keras.initializers.Constant(
-                                                                  self.embedding_matrix)))
-        self.classifier.add(tf.keras.layers.SpatialDropout1D(dropout))
-        self.classifier.add(tf.keras.layers.LSTM(units=neurons, input_shape=(self.max_length, self.embed_vec_len),
-                                              kernel_initializer=init, dropout=dropout,
-                                              recurrent_dropout=rec_dropout))
-        self.classifier.add(tf.keras.layers.Dense(units=1, kernel_initializer=init, activation=activ))
-        self.classifier.compile(loss=costfunction, optimizer=optimizer, metrics=['acc'])
-        print(self.classifier.summary())
+        self.build_LSTM_network()
 
         if clear_embedding_dictionary:
             self.embedding_matrix = None
             self.embedding_dict = None
 
-        es = []
-        if self.early_stopping:
-            es.append(
-                tf.keras.callbacks.EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=self.patience))
         print('Fitting GloVE model')
 
         history = self.classifier.fit(X, y, validation_split=self.validation_split, batch_size=self.batch_size,
                                       epochs=self.max_iter, sample_weight=weights,
-                                      callbacks=es, verbose=2)
+                                      callbacks=self.es, verbose=2)
 
         self.accuracy = np.max(history.history['val_acc'])
         return history
-
-    def refine(self, train_data, y, bootstrap=True, weights=None):
-        """
-        Train model further
-        :param train_data: (list of String) Training data
-        :param y: (vector) Targets
-        :param bootstrap: (bool) Bootstrap resample the refining data. Default True
-        :return: Fit history
-        """
-
-        if weights is None:
-            weights = np.ones(len(y))
-
-        """
-        # Preprocess and tokenize text
-        """
-
-        if bootstrap and 1 < self.bootstrap < len(y):
-            train_data, y, weights = resample(train_data, y, weights, n_samples=self.bootstrap, stratify=y,
-                                              replace=False)
-        elif bootstrap and self.bootstrap < 1:
-            n_samples = int(self.bootstrap * len(y))
-            train_data, y, weights = resample(train_data, y, weights, n_samples=n_samples, stratify=y,
-                                              replace=False)
-        filtered_data = tokenizer_filter(train_data, remove_punctuation=self.remove_punctuation,
-                                         remove_stopwords=self.remove_stopwords,
-                                         lemmatize=self.lemmatize, verbose=True)
-        print('Filtered data')
-
-        cleaned_data = [' '.join(tweet) for tweet in filtered_data]
-        train_sequences = self.tokenizer.texts_to_sequences(cleaned_data)
-
-        X = pad_sequences(train_sequences, maxlen=self.max_length, padding='pre')
-
-        es = []
-        if self.early_stopping:
-            es.append(
-                tf.keras.callbacks.EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=self.patience))
-
-        history = self.classifier.fit(X, y, validation_split=self.validation_split, callbacks=es,
-                                      batch_size=self.batch_size, sample_weight=weights,
-                                      epochs=self.max_iter, verbose=2)
-        self.accuracy = np.max(history.history['val_acc'])
-        return history
-
-    def predict(self, data, **kwargs):
-        """
-        Make binary sentiment predictions
-        :param data: (List of Strings) Input tweets
-        :param kwargs:
-        :return: (Vector of Bool) Predictions
-        """
-        return np.round(self.predict_proba(data, **kwargs))
-
-    def predict_proba(self, data):
-        """
-        Make continuous sentiment predictions
-        :param data: (List of Strings) Input tweets
-        :return: (Vector of Float) Predictions
-        """
-        if self.tokenizer is None:
-            raise ValueError('Model has not been trained!')
-
-        filtered_data = tokenizer_filter(data, remove_punctuation=self.remove_punctuation,
-                                         remove_stopwords=self.remove_stopwords,
-                                         lemmatize=self.lemmatize, verbose=False)
-
-        cleaned_data = [' '.join(tweet) for tweet in filtered_data]
-        X = pad_sequences(self.tokenizer.texts_to_sequences(cleaned_data), maxlen=self.max_length)
-        return self.classifier.predict(X)
 
     def export(self, filename):
         """
@@ -550,10 +461,10 @@ class GloVE_Model(Classifier):
                       'package': self.package,
                       'max_length': int(self.max_length),
                       'neurons': int(self.neurons),
+                      'hidden_neruons': int(self.hidden_neurons),
                       'dropout': float(self.dropout),
                       'rec_dropout': float(self.rec_dropout),
                       'activ': self.activ,
-                      'optimizer': self.optimizer,
                       'vocab_size': int(self.vocab_size),
                       'max_iter': int(self.max_iter),
                       'batch_size': self.batch_size,
@@ -565,7 +476,8 @@ class GloVE_Model(Classifier):
                       'remove_punctuation': self.remove_punctuation,
                       'remove_stopwords': self.remove_stopwords,
                       'lemmatize': self.lemmatize,
-                      'finetune_embeddings': self.finetune_embeddings
+                      'finetune_embeddings': self.finetune_embeddings,
+                      'learning_rate': self.learning_rate
                       }
 
         if parameters['bootstrap'] < 1:
