@@ -368,7 +368,7 @@ class GloVE_Model(LSTM_Model):
                 file_fetcher.download_file("http://nlp.stanford.edu/data/glove.twitter.27B.zip",
                                            "glove_dicts.zip")
                 with ZipFile('glove_dicts.zip', 'r') as zipObj:
-                    zipObj.extractall(path='/.glove_dicts')
+                    zipObj.extractall('glove_dicts')
                 self.embedding_dict = {}
                 with open('/.glove_dicts/glove.twitter.27B.' + str(self.embed_vec_len) + 'd.txt', encoding="utf8") as f:
                     for line in f:
