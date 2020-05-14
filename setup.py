@@ -4,6 +4,11 @@ import setuptools # USe to build pckg
 with open("README.md","r") as fh:
     long_description = fh.read()
 
+requirements = []
+with open('requirements.txt', 'r') as fh:
+    for line in fh:
+        requirements.append(line.strip())
+        
 setuptools.setup(
     name = "twitter_nlp_toolkit", # name shown on pypi and used with import
     version ="0.1.5",
@@ -19,12 +24,7 @@ setuptools.setup(
         "Programming Language :: Python :: 3.6",
         "Operating System :: OS Independent" 
     ],
-    install_requires=[
-          'numpy',
-          'pandas',
-          'scikit-learn',
-          
-      ],
+    install_requires = requirements
     python_requires='>=3.6',
     include_package_data=True
 
