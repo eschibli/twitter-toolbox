@@ -6,7 +6,7 @@ with open("README.md","r") as fh:
 
 setuptools.setup(
     name = "twitter_nlp_toolkit", # name shown on pypi and used with import
-    version ="0.1.3",
+    version ="0.1.5",
     author = "Eric Schibli , Mohamad (Moe) Antar",
     author_email = "moe.antar14@gmail.com",
     description = "Tools for collecting , processing and analyzing twitter data",
