@@ -24,7 +24,7 @@ setuptools.setup(
         "Programming Language :: Python :: 3.6",
         "Operating System :: OS Independent" 
     ],
-    install_requires = requirements
+    install_requires = requirements,
     python_requires='>=3.6',
     include_package_data=True
 
