@@ -7,3 +7,5 @@ tweepy
 tqdm
 requests
 spacy
+bert-for-tf2
+tensorflow-hub
