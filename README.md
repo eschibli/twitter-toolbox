@@ -7,7 +7,7 @@ Install:
 pip install twitter-nlp-toolkit
 ```
 
-To utilize the sentiment analysis package, you will also need to install SpaCy's small English language model. 
+To utilize the sentiment analysis package, you will also need to install SpaCy's small English language model:
 
 ```bash
 python -m spacy download en_core_web_sm
