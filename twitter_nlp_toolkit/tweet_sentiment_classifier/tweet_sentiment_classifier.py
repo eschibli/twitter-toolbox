@@ -148,6 +148,10 @@ class SentimentAnalyzer:
             self.download_large_ensemble()
             self.load_models(path=self.model_path + '/large_ensemble', **kwargs)
 
+    def add_bert_model(self, name, **kwargs):
+        from .models.bert_models import BERT_Model
+        self.models[name] = BERT_Model(**kwargs)
+
     def add_model(self, model, name, **kwargs):
         """
         Add a model.
