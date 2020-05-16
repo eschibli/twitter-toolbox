@@ -97,7 +97,7 @@ class BERT_Model(Classifier):
         output_layer = tf.keras.layers.Dense(units=1, kernel_initializer=tf.keras.initializers.glorot_uniform(seed=1),
                                              activation=self.activ)(bert_model.outputs[0])
         self.classifier = tf.keras.Model(inputs=bert_model.inputs, outputs=output_layer)
-        self.classifier.compile(loss=self.loss, optimizer=self.optimzier(learning_rate=self.learning_rate), metrics=['acc'])
+        self.classifier.compile(loss=self.loss, optimizer=self.optimzier(learning_rate=self.learning_rate, clipnorm=1), metrics=['acc'])
 
         self.vocab_file = bert_layer.resolved_object.vocab_file.asset_path.numpy()
         do_lower_case = bert_layer.resolved_object.do_lower_case.numpy()
@@ -151,7 +151,7 @@ class BERT_Model(Classifier):
 
         print('Fitting BERT classifier')
         history = self.classifier.fit(trainX, trainy, sample_weight=weights, epochs=self.max_iter, batch_size=self.batch_size,
-                                      verbose=1, validation_split=self.validation_split, callbacks=es)
+                                      verbose=1, validation_split=self.validation_split, callbacks=es, steps_per_epoch=10000)
 
         self.accuracy = np.max(history.history['val_acc'])
         return history

@@ -252,7 +252,7 @@ class SentimentAnalyzer:
                 print('Deleting model %s' % name)
                 self.delete_model(name)
 
-    def fit(self, X, y, models=None, weights=None, custom_vocabulary=None, preprocess=True, **kwargs):
+    def fit(self, X, y, models=None, weights=None, custom_vocabulary=None, shuffle=True, **kwargs):
         """
         Fits the enabled models onto X. Note that this rebuilds the models, as it is not currently possible to update
         the tokenizers
@@ -270,6 +270,10 @@ class SentimentAnalyzer:
 
         if models is None:
             models = self.models.keys()
+
+        if shuffle:
+            seed = np.random.permutation(len(y))
+            X, y = X[seed], y[seed]
 
         for name in models:
             try:
