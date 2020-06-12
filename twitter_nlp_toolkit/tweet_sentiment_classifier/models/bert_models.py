@@ -61,7 +61,7 @@ class BERT_Model(Classifier):
     def __init__(self, model="bert_en_uncased_L-12_H-768_A-12/1", max_length=48, patience=10, early_stopping=True,
                  validation_split=0.2, max_iter=500, bootstrap=1,
                  batch_size=32, accuracy=0, activ='sigmoid', optimizer=tf.keras.optimizers.Adam,
-                 learning_rate=1E-4, finetune_embeddings=True, **kwargs):
+                 learning_rate=1E-4, finetune_embeddings=True, hidden_neurons=0,  **kwargs):
         self.type = 'BERT_Model'
         self.package = 'twitter_nlp_toolkit.tweet_sentiment_classifier.models.bert_models'
         self.model = model
@@ -77,6 +77,7 @@ class BERT_Model(Classifier):
         self.optimzier = optimizer
         self.learning_rate = learning_rate
         self.finetune_embeddings = finetune_embeddings
+        self.hidden_neurons = hidden_neurons
 
         self.loss = 'binary_crossentropy'
 
@@ -94,11 +95,21 @@ class BERT_Model(Classifier):
 
         bert_model = tf.keras.Model(inputs=[input_word_ids, input_mask, segment_ids],
                                     outputs=[pooled_output, sequence_output])
-        output_layer = tf.keras.layers.Dense(units=1, kernel_initializer=tf.keras.initializers.glorot_uniform(seed=1),
-                                             activation=self.activ)(bert_model.outputs[0])
+        if self.hidden_neurons is not 0:
+            hidden_layer = tf.keras.layers.Dense(units=self.hidden_neurons, kernel_initializer=tf.keras.initializers.glorot_uniform(seed=1),
+                                  activation='relu')(bert_model.outputs[0])
+            dropout_layer = tf.keras.layers.Dropout(0.25)(hidden_layer)
+            output_layer = tf.keras.layers.Dense(units=1,
+                                                 kernel_initializer=tf.keras.initializers.glorot_uniform(seed=1),
+                                                 activation=self.activ)(dropout_layer)
+        else:
+            output_layer = tf.keras.layers.Dense(units=1,
+                                                 kernel_initializer=tf.keras.initializers.glorot_uniform(seed=1),
+                                                 activation=self.activ)(bert_model.outputs[0])
+
         self.classifier = tf.keras.Model(inputs=bert_model.inputs, outputs=output_layer)
         self.classifier.compile(loss=self.loss, optimizer=self.optimzier(learning_rate=self.learning_rate, clipnorm=1), metrics=['acc'])
-
+        self.classifier.summary()
         self.vocab_file = bert_layer.resolved_object.vocab_file.asset_path.numpy()
         do_lower_case = bert_layer.resolved_object.do_lower_case.numpy()
         self.tokenizer = FullTokenizer(self.vocab_file, do_lower_case)

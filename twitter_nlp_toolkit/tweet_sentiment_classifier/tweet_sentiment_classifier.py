@@ -218,6 +218,29 @@ class SentimentAnalyzer:
 
         self.models[name] = GloVE_Model(glove_index=glove_index, **kwargs)
 
+    def add_NGRAM_model(self, name, glove_index=None, **kwargs):
+        """
+        Add another lstm model with pre-trained embeddings to the classifier.
+        :param glove_index: (Dict) Embedding index to use. IF not provided, a standard one will be downloaded
+        :param name: (String) Name of model
+        :param embed_vec_len: (int) Embedding depth. Inferred from dictionary if provided. Otherwise 25, 50, 100, and
+        are acceptible values. 200
+        :param embedding_dict: (dict) Embedding dictionary
+        :param max_length: (int) Maximum text length, ie, number of temporal nodes. Default 25
+        :param vocab_size: (int) Maximum vocabulary size. Default 1E7
+        :param max_iter: (int) Number of training epochs. Default 100
+        :param neurons: (int) Depth (NOT LENGTH) of LSTM network. Default 100
+        :param dropout: (float) Dropout
+        :param activ: (String) Activation function (for visible layer). Default 'hard_sigmoid'
+        :param optimizer: (String) Optimizer. Default 'adam'
+        :param early_stopping: (bool) Train with early stopping
+        :param validation_split: (float) Fraction of training data to withold for validation
+        :param patience: (int) Number of epochs to wait before early stopping
+        """
+        from .models.lstm_models import NGRAM_Model
+
+        self.models[name] = NGRAM_Model(glove_index=glove_index, **kwargs)
+
     def delete_models(self, models):
         """
         Delete models
@@ -273,7 +296,7 @@ class SentimentAnalyzer:
 
         if shuffle:
             seed = np.random.permutation(len(y))
-            X, y = X[seed], y[seed]
+            X, y = np.array(X)[seed], np.array(y)[seed]
 
         for name in models:
             try:
