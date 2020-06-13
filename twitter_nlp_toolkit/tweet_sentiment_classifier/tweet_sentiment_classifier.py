@@ -195,6 +195,21 @@ class SentimentAnalyzer:
 
         self.models[name] = LSTM_Model(**kwargs)
 
+    def add_charlevel_model(self, name, **kwargs):
+        """
+        Add another LSTM model to the classifier
+        :param max_length: (int) Maximum text length, ie, number of temporal nodes. Default 25
+        :param vocab_size: (int) Maximum vocabulary size. Default 1E7
+        :param max_iter: (int) Number of training epochs. Default 100
+        :param neurons: (int) Depth (NOT LENGTH) of LSTM network. Default 100
+        :param dropout: (float) Dropout
+        :param activ: (String) Activation function (for visible layer). Default 'hard_sigmoid'
+        :param optimizer: (String) Optimizer. Default 'adam'
+        """
+        from .models.lstm_models import Charlevel_Model
+
+        self.models[name] = Charlevel_Model(**kwargs)
+
     def add_glove_model(self, name, glove_index=None, **kwargs):
         """
         Add another lstm model with pre-trained embeddings to the classifier.
