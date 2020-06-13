@@ -934,7 +934,7 @@ class Charlevel_Model(LSTM_Model):
         cleaned_data, y, weights = self.preprocess(train_data, y, weights)
 
         self.tokenizer = Tokenizer(num_words=self.vocab_size, filters='"#$%&()*+-/:;<=>?@[\\]^_`{|}~\t\n',
-                                   char_level=False, oov_token=0)
+                                   char_level=True, oov_token=0)
         self.tokenizer.fit_on_texts(cleaned_data)
 
         train_sequences = self.tokenizer.texts_to_sequences(cleaned_data)
@@ -995,12 +995,12 @@ class Charlevel_Model(LSTM_Model):
         os.makedirs(filename, exist_ok=True)
         with open(filename + '/param.json', 'w+') as outfile:
             json.dump(parameters, outfile)
-        with open(filename + '/ngram_tokenizer.pkl', 'wb+') as outfile:
+        with open(filename + '/charlevel_tokenizer.pkl', 'wb+') as outfile:
             pkl.dump(self.tokenizer, outfile)
         # model_json = self.classifier.to_json()
-        with open(filename + "/ngram_model.json", "w+") as json_file:
+        with open(filename + "/charlevel_model.json", "w+") as json_file:
             json_file.write(self.classifier.to_json())
-        self.classifier.save_weights(filename + "/ngram_model.h5")
+        self.classifier.save_weights(filename + "/charlevel_model.h5")
 
     def load_model(self, filename):
         """
