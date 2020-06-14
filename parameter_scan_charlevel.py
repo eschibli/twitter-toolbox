@@ -34,15 +34,15 @@ review_samples = [1, 1, 1, 10000]
 
 tweet_samples = [1000000, 300000, 1000000]
 review_samples = [1, 1, 1, 10000, 100000, 1000000]
-vocab_sizes = [10000, 30000, 50000, 100000]
+vocab_sizes = [128]
 neuron_counts = [30, 50, 100]
-hidden_neruon_counts = [0, 0, 0]
-embedding_depths = [50, 100, 200]
-max_lengths = np.linspace(24, 36, dtype=int)
-batch_sizes = [512, 1028]
+hidden_neruon_counts = [0, 0, 0, 10, 20, 30]
+embedding_depths = [128]
+max_lengths = [140, 280]
+batch_sizes = [32, 64]
 learning_rates = [6E-5, 1E-4, 3E-4, 1E-3]
-n_grams = [1, 2, 3, 4, 5]
-feature_maps = [5, 10, 20, 30, 50, 100]
+n_grams = [1, 2, 3, 5, 10, 20]
+feature_maps = [5, 10, 50, 100]
 binary = [True, False]
 """
 Other parameters
@@ -158,7 +158,7 @@ while True:
     reviews = choice(review_samples)
     n_gram = choice(n_grams)
     feature_map = choice(feature_maps)
-    finetune = choice([0, 1])
+    finetune = True
     """
     embedding_depth = 200
     bootstrap_size = 1

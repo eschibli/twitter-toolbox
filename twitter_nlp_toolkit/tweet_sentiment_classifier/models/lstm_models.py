@@ -876,19 +876,27 @@ class Charlevel_Model(LSTM_Model):
                                                       embeddings_initializer=self.embedding_initializer,
                                                       trainable=self.finetune_embeddings))
 
-        self.classifier.add(tf.keras.layers.Conv1D(self.feature_maps, self.n_gram, self.embed_vec_len, data_format='channels_first'))
-        self.classifier.add(tf.keras.layers.Dropout(self.dropout))
+        self.classifier.add(tf.keras.layers.Reshape((self.max_length, self.embed_vec_len, 1)))
+        self.classifier.add(tf.keras.layers.Conv2D(self.feature_maps, kernel_size=self.n_gram))
+        self.classifier.summary()
+        # self.classifier.add(tf.keras.layers.Reshape((self.max_length, self.feature_maps, 1)))
 
-        # self.classifier.add(tf.keras.layers.MaxPooling2D(poolsize=(self.max_length - self.n_gram + 1, 1)))
+        self.classifier.add(tf.keras.layers.MaxPooling2D(pool_size=(1, self.feature_maps), data_format='channels_first'))
+
+        self.classifier.add(tf.keras.layers.Reshape((self.max_length-2, self.embed_vec_len-2)))
 
         self.classifier.add(tf.keras.layers.LSTM(units=self.neurons, input_shape=(self.max_length, self.embed_vec_len),
                                                  kernel_initializer=init, dropout=self.dropout,
                                                  recurrent_dropout=self.rec_dropout))
 
         self.classifier.summary()
+        self.classifier.add(tf.keras.layers.Flatten())
+
+        self.classifier.add(tf.keras.layers.Dropout(self.dropout))
 
         if self.hidden_neurons > 0:
             self.classifier.add(
+
                 tf.keras.layers.Dense(units=self.hidden_neurons, kernel_initializer=init, activation='elu'))
         self.classifier.add(tf.keras.layers.Dense(units=1, kernel_initializer=init, activation=self.activ))
         self.classifier.compile(loss='binary_crossentropy', optimizer=self.optimizer, metrics=['acc'])
@@ -944,7 +952,7 @@ class Charlevel_Model(LSTM_Model):
 
         X = pad_sequences(train_sequences, maxlen=self.max_length, padding='pre')
 
-        self.build_LSTM_network()
+        self.build_charlevel_network()
 
         print('Fitting LSTM model')
 
