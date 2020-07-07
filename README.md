@@ -1,13 +1,14 @@
 
 # Twitter Toolbox
 
-A suite of tools for collecting, pre-processing, analyzing and sentiment-scoring twitter data.
+A suite of tools for collecting, pre-processing, analyzing and sentiment-scoring twitter data. A additional brief walkthrough can be found [here](https://medium.com/@eric.schibli/simple-twitter-analytics-with-twitter-nlp-toolkit-7d7d79bf2535).
+
 Install:
 ```bash
 pip install twitter-nlp-toolkit
 ```
 
-To utilize the sentiment analysis package, you will also need to install SpaCy's small English language model:
+To utilize the sentiment analysis package, you will also need to install SpaCy's small English language model.
 
 ```bash
 python -m spacy download en_core_web_sm
@@ -25,11 +26,9 @@ keywords = ["python"]
 stream = twitter_listener.TwitterStreamListener(**credentials)
 stream.collect_from_stream(max_tweets=10,output_json_name="python_tweets.json", target_words=keywords)
 ```
-"keywords" uses the Twitter API. Documentation and tips for setting up smart keyword queries can be found here:
-https://developer.twitter.com/en/docs/tweets/rules-and-filtering/overview/standard-operators
+"keywords" uses the Twitter API. Documentation and tips for setting up smart keyword queries can be found [here](https://developer.twitter.com/en/docs/tweets/rules-and-filtering/overview/standard-operators)
 
-"credentials" contains your Twitter API key, which can be obtained for free here:
-https://developer.twitter.com/en/docs/basics/developer-portal/overview
+"credentials" contains your Twitter API key, which can be obtained for free [here](https://developer.twitter.com/en/docs/basics/developer-portal/overview)
 
 The module also contains a parser to convert the .json-formatted tweets into .csv for easy use (ie, with Pandas).
 
@@ -63,7 +62,7 @@ networks, and a Google BERT model. The large ensemble is more accurate (and expe
 is extremely resource intensive and as such, isn't recommended for processing large numbers of tweets unless you have
 a powerful GPU.
 
-These ensembles were trained primarily on the Sent140 dataset: http://help.sentiment140.com/ and primarily tested
+These ensembles were trained primarily on the [Sent140 dataset](http://help.sentiment140.com/) and primarily tested
 against the US Airlines dataset previously hosted on Crowdflower.com.
 
 Please see the jupyter notebook (.ipynb) files at the root directory for further demonstrations of working code.
