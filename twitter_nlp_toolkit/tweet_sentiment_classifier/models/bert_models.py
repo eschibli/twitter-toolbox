@@ -109,7 +109,6 @@ class BERT_Model(Classifier):
 
         self.classifier = tf.keras.Model(inputs=bert_model.inputs, outputs=output_layer)
         self.classifier.compile(loss=self.loss, optimizer=self.optimzier(learning_rate=self.learning_rate, clipnorm=1), metrics=['acc'])
-        self.classifier.summary()
         self.vocab_file = bert_layer.resolved_object.vocab_file.asset_path.numpy()
         do_lower_case = bert_layer.resolved_object.do_lower_case.numpy()
         self.tokenizer = FullTokenizer(self.vocab_file, do_lower_case)
