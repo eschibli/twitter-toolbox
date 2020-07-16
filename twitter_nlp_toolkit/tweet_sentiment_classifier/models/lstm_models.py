@@ -792,12 +792,12 @@ class Charlevel_Model(LSTM_Model):
     # TODO add automatic embedding downloading and unzipping
     """
 
-    def __init__(self, embedding_dict=None, embed_vec_len=200, max_length=140, vocab_size=128, batch_size=10000,
+    def __init__(self, embedding_dict=None, embed_vec_len=128, max_length=140, vocab_size=128, batch_size=10000,
                  neurons=100,
                  hidden_neurons=0, dropout=0.2, bootstrap=1, early_stopping=True, validation_split=0.2, patience=50,
                  max_iter=250,
                  rec_dropout=0.2, activ='hard_sigmoid', accuracy=0, remove_punctuation=False, learning_rate=0.001,
-                 remove_stopwords=False, lemmatize=False, finetune_embeddings=True, n_gram=3, feature_maps=10, **kwargs):
+                 remove_stopwords=False, lemmatize=False, finetune_embeddings=True, n_grams=[3,4,5], feature_maps=10, bidirectional=False, **kwargs):
         """
         Constructor for NGRAM LSTM classifier using pre-trained embeddings
         Be sure to add extra parameters to export()
@@ -853,54 +853,60 @@ class Charlevel_Model(LSTM_Model):
         self.embedding_matrix = None
         self.accuracy = accuracy
 
-        self.n_gram = n_gram
+        self.n_grams = n_grams
         self.feature_maps = feature_maps
+        self.bidirectional = bidirectional
 
         if self.embedding_dict is not None:
             self.embed_vec_len = len(list(self.embedding_dict.values())[0])
             print('Setting embedding depth to {}'.format(self.embed_vec_len))
 
     def build_charlevel_network(self):
+        # TODO consider bidirectional
         print("Creating character-level model")
         if self.optimizer == 'adam':
             self.optimizer = tf.keras.optimizers.Adam(learning_rate=self.learning_rate)
 
         init = tf.keras.initializers.glorot_uniform(seed=1)
 
-        self.classifier = tf.keras.models.Sequential()
-
-        self.classifier.add(tf.keras.layers.Embedding(input_dim=len(self.word_index) + 1,
+        inputs = tf.keras.Input(shape=(self.max_length,))
+        embeddings = tf.keras.layers.Embedding(input_dim=len(self.word_index) + 1,
                                                       output_dim=self.embed_vec_len,
                                                       input_length=self.max_length,
                                                       mask_zero=False,
                                                       embeddings_initializer=self.embedding_initializer,
-                                                      trainable=self.finetune_embeddings))
-
-        self.classifier.add(tf.keras.layers.Reshape((self.max_length, self.embed_vec_len, 1)))
-        self.classifier.add(tf.keras.layers.Conv2D(self.feature_maps, kernel_size=self.n_gram))
-        self.classifier.summary()
-        # self.classifier.add(tf.keras.layers.Reshape((self.max_length, self.feature_maps, 1)))
-
-        self.classifier.add(tf.keras.layers.MaxPooling2D(pool_size=(1, self.feature_maps), data_format='channels_first'))
-
-        self.classifier.add(tf.keras.layers.Reshape((self.max_length-2, self.embed_vec_len-2)))
-
-        self.classifier.add(tf.keras.layers.LSTM(units=self.neurons, input_shape=(self.max_length, self.embed_vec_len),
+                                                      trainable=self.finetune_embeddings)(inputs)
+        reshape = tf.keras.layers.Reshape((self.max_length, self.embed_vec_len, 1))(embeddings)
+        outputs = []
+        for ngram in self.n_grams:
+            conv_layer = tf.keras.layers.Conv2D(self.feature_maps, kernel_size=ngram)(reshape)
+            #reshape_layer = tf.keras.layers.Reshape((self.max_length, self.feature_maps, 1))(conv_layer)
+            pooling_layer = tf.keras.layers.MaxPooling2D(pool_size=(1, self.embed_vec_len-ngram), data_format='channels_last')(conv_layer)
+            reshape_layer = tf.keras.layers.Reshape((self.max_length-ngram+1,self.feature_maps))(pooling_layer)
+            if self.bidirectional:
+                outputs.append(tf.keras.layers.Bidirectional(
+                    tf.keras.layers.LSTM(units=self.neurons, input_shape=(self.max_length, self.embed_vec_len),
+                                         kernel_initializer=init, dropout=self.dropout,
+                                         recurrent_dropout=self.rec_dropout))(reshape_layer))
+            else:
+                outputs.append(tf.keras.layers.LSTM(units=self.neurons, input_shape=(self.max_length, self.embed_vec_len),
                                                  kernel_initializer=init, dropout=self.dropout,
-                                                 recurrent_dropout=self.rec_dropout))
+                                                 recurrent_dropout=self.rec_dropout)(reshape_layer))
+        output = tf.keras.layers.concatenate(outputs)
+
+        flattened = tf.keras.layers.Flatten()(output)
+        if self.hidden_neurons > 0:
+            hidden_layer = tf.keras.layers.Dense(units=self.hidden_neurons, kernel_initializer=init, activation='relu')(flattened)
+            dropout = tf.keras.layers.Dropout(self.dropout)(hidden_layer)
+        else:
+            dropout = tf.keras.layers.Dropout(self.dropout)(flattened)
+
+        output = tf.keras.layers.Dense(units=1, kernel_initializer=init, activation=self.activ)(dropout)
+        self.classifier = tf.keras.Model(inputs=inputs, outputs=output)
+        self.classifier.compile(loss='binary_crossentropy', optimizer=self.optimizer, metrics=['acc'])
 
         self.classifier.summary()
-        self.classifier.add(tf.keras.layers.Flatten())
 
-        self.classifier.add(tf.keras.layers.Dropout(self.dropout))
-
-        if self.hidden_neurons > 0:
-            self.classifier.add(
-
-                tf.keras.layers.Dense(units=self.hidden_neurons, kernel_initializer=init, activation='elu'))
-        self.classifier.add(tf.keras.layers.Dense(units=1, kernel_initializer=init, activation=self.activ))
-        self.classifier.compile(loss='binary_crossentropy', optimizer=self.optimizer, metrics=['acc'])
-        print(self.classifier.summary())
         if self.early_stopping:
             self.es.append(
                 tf.keras.callbacks.EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=self.patience))
@@ -958,7 +964,7 @@ class Charlevel_Model(LSTM_Model):
 
         history = self.classifier.fit(X, y, validation_split=self.validation_split, callbacks=self.es,
                                       batch_size=self.batch_size, sample_weight=weights,
-                                      epochs=self.max_iter, verbose=2)
+                                      epochs=self.max_iter, verbose=1, steps_per_epoch=100)
 
         self.accuracy = np.max(history.history['val_acc'])
         return history
@@ -991,8 +997,8 @@ class Charlevel_Model(LSTM_Model):
                       'finetune_embeddings': self.finetune_embeddings,
                       'learning_rate': self.learning_rate,
                       'n_gram': self.n_gram,
-                      'feature_maps': self.feature_maps
-
+                      'feature_maps': self.feature_maps,
+                      'bidirectional': self.bidirectional
                       }
 
         if parameters['bootstrap'] < 1:
@@ -1009,6 +1015,12 @@ class Charlevel_Model(LSTM_Model):
         with open(filename + "/charlevel_model.json", "w+") as json_file:
             json_file.write(self.classifier.to_json())
         self.classifier.save_weights(filename + "/charlevel_model.h5")
+
+        tf.keras.utils.plot_model(
+            self.classifier,
+            to_file=(filename + "/model_topology.png"),
+            show_shapes=True,
+            show_layer_names=True)
 
     def load_model(self, filename):
         """

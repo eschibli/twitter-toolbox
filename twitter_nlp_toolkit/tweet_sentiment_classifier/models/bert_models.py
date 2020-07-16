@@ -161,7 +161,7 @@ class BERT_Model(Classifier):
 
         print('Fitting BERT classifier')
         history = self.classifier.fit(trainX, trainy, sample_weight=weights, epochs=self.max_iter, batch_size=self.batch_size,
-                                      verbose=1, validation_split=self.validation_split, callbacks=es, steps_per_epoch=10000)
+                                      verbose=1, validation_split=self.validation_split, callbacks=es, steps_per_epoch=100000, validation_steps=10000)
 
         self.accuracy = np.max(history.history['val_acc'])
         return history
