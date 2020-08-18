@@ -26,24 +26,40 @@ my_devices = tf.config.experimental.list_physical_devices(device_type='CPU')
 tf.config.experimental.set_visible_devices(devices= my_devices, device_type='CPU')
 """
 
+# Increase available memory
+gpus = tf.config.experimental.list_physical_devices('GPU')
+if gpus:
+    try:
+    # Currently, memory growth needs to be the same across GPUs
+        for gpu in gpus:
+            tf.config.experimental.set_memory_growth(gpu, True)
+        logical_gpus = tf.config.experimental.list_logical_devices('GPU')
+        print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
+    except RuntimeError as e:
+    # Memory growth must be set before GPUs have been initialized
+        print(e)
+
 bootstrap_sizes = [1]
-
-tweet_samples = [10000]
-review_samples = [1, 1, 1, 10000]
+testing = False
 
 
-tweet_samples = [1000000, 300000, 1000000]
-review_samples = [1, 1, 1, 10000, 100000, 1000000]
+tweet_samples = [1000000]
+review_samples = [1, 1, 1, 1000000]
 vocab_sizes = [128]
 neuron_counts = [30, 50, 100]
-hidden_neruon_counts = [0, 0, 0, 10, 20, 30]
-embedding_depths = [128]
+hidden_neruon_counts = [0, 30, 50, 100]
+embedding_depths = [128, 256]
 max_lengths = [140, 280]
-batch_sizes = [32, 64]
-learning_rates = [6E-5, 1E-4, 3E-4, 1E-3]
-n_grams = [1, 2, 3, 5, 10, 20]
-feature_maps = [5, 10, 50, 100]
-binary = [True, False]
+batch_sizes = [32, 64, 128]
+learning_rates = [1E-4, 3E-4]
+n_grams = [[1, 2, 3, 4, 5], [2, 4, 8, 16], [4, 8, 16, 32]]
+# n_grams = [[2, 3, 5, 10]]
+feature_maps = [5, 10, 20, 30]
+bidirectionals = [True, False]
+if testing:
+    tweet_samples = [10000]
+    review_samples = [1, 1, 1, 10000]
+
 """
 Other parameters
 """
@@ -159,6 +175,7 @@ while True:
     n_gram = choice(n_grams)
     feature_map = choice(feature_maps)
     finetune = True
+    bidirectional = choice(bidirectionals)
     """
     embedding_depth = 200
     bootstrap_size = 1
@@ -185,10 +202,10 @@ while True:
     params = {'bootstrap': bootstrap_size, 'embed_vec_len': embedding_depth, 'neurons': neurons,
               'hidden_neurons': hidden_neurons, 'max_length': max_length, 'batch_size': batch_size,
               'vocab_size': vocab_size, 'max_iter': 5000, 'learning_rate': learning_rate, 'patience': 20, 'finetune_embeddings': finetune,
-              'n_grams':n_gram, 'feature_maps': feature_map}
+              'n_grams':n_gram, 'feature_maps': feature_map, 'bidirectional': bidirectional}
 
     model_name = 'charlevel_' + str(embedding_depth) + 'D_' + str(neurons) + 'N_' + str(hidden_neurons) + 'N_' + str(vocab_size) + 'V_' \
-                 + str(tweets) + 'T_' + str(reviews) + 'R_'+ str(n_gram) + 'NG_'+ str(feature_map) + 'FM_' + str(finetune) + 'F_'+ str(i)
+                 + str(tweets) + 'T_' + str(reviews) + 'R_'+ str(n_gram) + 'NG_'+ str(feature_map) + 'FM_' + str(bidirectional) + 'B_'+ str(i)
 
     TweetClassifier.add_charlevel_model(model_name, **params)
 

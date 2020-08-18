@@ -581,7 +581,7 @@ class NGRAM_Model(LSTM_Model):
         self.embedding_matrix = None
         self.accuracy = accuracy
 
-        self.n_gram = n_gram
+        self.n_grams = n_gram
         self.feature_maps = feature_maps
 
         if self.embedding_dict is not None:
@@ -604,10 +604,10 @@ class NGRAM_Model(LSTM_Model):
                                                       embeddings_initializer=self.embedding_initializer,
                                                       trainable=self.finetune_embeddings))
 
-        self.classifier.add(tf.keras.layers.Conv1D(self.feature_maps, self.n_gram, self.embed_vec_len, data_format='channels_first'))
+        self.classifier.add(tf.keras.layers.Conv1D(self.feature_maps, self.n_grams, self.embed_vec_len, data_format='channels_first'))
         self.classifier.add(tf.keras.layers.Dropout(self.dropout))
 
-        # self.classifier.add(tf.keras.layers.MaxPooling2D(poolsize=(self.max_length - self.n_gram + 1, 1)))
+        # self.classifier.add(tf.keras.layers.MaxPooling2D(poolsize=(self.max_length - self.n_grams + 1, 1)))
 
         self.classifier.add(tf.keras.layers.LSTM(units=self.neurons, input_shape=(self.max_length, self.embed_vec_len),
                                                  kernel_initializer=init, dropout=self.dropout,
@@ -753,7 +753,7 @@ class NGRAM_Model(LSTM_Model):
                       'lemmatize': self.lemmatize,
                       'finetune_embeddings': self.finetune_embeddings,
                       'learning_rate': self.learning_rate,
-                      'n_gram': self.n_gram,
+                      'n_grams': self.n_grams,
                       'feature_maps': self.feature_maps
 
                       }
@@ -933,6 +933,7 @@ class Charlevel_Model(LSTM_Model):
 
         cleaned_data = [' '.join(tweet) for tweet in filtered_data]
         print(cleaned_data[0])
+
         return cleaned_data, y, weights
 
     def fit(self, train_data, y, weights=None, custom_vocabulary=None):
@@ -946,8 +947,8 @@ class Charlevel_Model(LSTM_Model):
         """
 
         cleaned_data, y, weights = self.preprocess(train_data, y, weights)
-
-        self.tokenizer = Tokenizer(num_words=self.vocab_size, filters='"#$%&()*+-/:;<=>?@[\\]^_`{|}~\t\n',
+        # filters='"#$%&()*+-/:;<=>?@[\\]^_`{|}~\t\n',
+        self.tokenizer = Tokenizer(num_words=self.vocab_size,
                                    char_level=True, oov_token=0)
         self.tokenizer.fit_on_texts(cleaned_data)
 
@@ -962,9 +963,11 @@ class Charlevel_Model(LSTM_Model):
 
         print('Fitting LSTM model')
 
+        steps_per_epoch = min((int(len(y) / self.batch_size)), 1000)
+
         history = self.classifier.fit(X, y, validation_split=self.validation_split, callbacks=self.es,
                                       batch_size=self.batch_size, sample_weight=weights,
-                                      epochs=self.max_iter, verbose=1, steps_per_epoch=100)
+                                      epochs=self.max_iter, verbose=1, steps_per_epoch=steps_per_epoch)
 
         self.accuracy = np.max(history.history['val_acc'])
         return history
@@ -996,7 +999,7 @@ class Charlevel_Model(LSTM_Model):
                       'lemmatize': self.lemmatize,
                       'finetune_embeddings': self.finetune_embeddings,
                       'learning_rate': self.learning_rate,
-                      'n_gram': self.n_gram,
+                      'n_grams': self.n_grams,
                       'feature_maps': self.feature_maps,
                       'bidirectional': self.bidirectional
                       }
