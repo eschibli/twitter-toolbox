@@ -24,7 +24,7 @@ class LSTM_Model(Classifier):
                  dropout=0.25, rec_dropout=0.25, embed_vec_len=200, activ='hard_sigmoid',
                  learning_rate=0.001, bootstrap=1, early_stopping=True, patience=50, validation_split=0.2, max_iter=250,
                  batch_size=10000, accuracy=0, remove_punctuation=False, remove_stopwords=False, lemmatize=True,
-                 hidden_neurons=0, **kwargs):
+                 hidden_neurons=0, bidirectional=False, **kwargs):
         """
         Constructor for LSTM classifier using pre-trained embeddings
         Be sure to add additional parametesr to export()
@@ -70,6 +70,7 @@ class LSTM_Model(Classifier):
         self.embedding_matrix = None
         self.es = []
         self.accuracy = accuracy
+        self.bidirectional = bidirectional
 
     def preprocess(self, train_data, y, weights=None):
         if weights is None:
@@ -143,10 +144,20 @@ class LSTM_Model(Classifier):
                                                       mask_zero=True,
                                                       embeddings_initializer=self.embedding_initializer,
                                                       trainable=self.finetune_embeddings))
-
+        """
         self.classifier.add(tf.keras.layers.LSTM(units=self.neurons, input_shape=(self.max_length, self.embed_vec_len),
                                                  kernel_initializer=init, dropout=self.dropout,
                                                  recurrent_dropout=self.rec_dropout))
+        """
+        if self.bidirectional:
+            self.classifier.add(tf.keras.layers.Bidirectional(
+                tf.keras.layers.LSTM(units=self.neurons, input_shape=(self.max_length, self.embed_vec_len),
+                                     kernel_initializer=init, dropout=self.dropout,
+                                     recurrent_dropout=self.rec_dropout)))
+        else:
+            self.classifier.add(tf.keras.layers.LSTM(units=self.neurons, input_shape=(self.max_length, self.embed_vec_len),
+                                                kernel_initializer=init, dropout=self.dropout,
+                                                recurrent_dropout=self.rec_dropout))
 
         if self.hidden_neurons > 0:
             self.classifier.add(
@@ -250,7 +261,8 @@ class LSTM_Model(Classifier):
                       'remove_punctuation': self.remove_punctuation,
                       'remove_stopwords': self.remove_stopwords,
                       'lemmatize': self.lemmatize,
-                      'learning_rate': self.learning_rate
+                      'learning_rate': self.learning_rate,
+                      'bidirectional': self.bidirectional
                       }
 
         if parameters['bootstrap'] < 1:
@@ -295,7 +307,7 @@ class GloVE_Model(LSTM_Model):
                  hidden_neurons=0, dropout=0.2, bootstrap=1, early_stopping=True, validation_split=0.2, patience=50,
                  max_iter=250,
                  rec_dropout=0.2, activ='hard_sigmoid', accuracy=0, remove_punctuation=False, learning_rate=0.001,
-                 remove_stopwords=False, lemmatize=True, finetune_embeddings=False, **kwargs):
+                 remove_stopwords=False, lemmatize=True, finetune_embeddings=False, bidirectional=False, **kwargs):
         """
         Constructor for LSTM classifier using pre-trained embeddings
         Be sure to add extra parameters to export()
@@ -324,6 +336,7 @@ class GloVE_Model(LSTM_Model):
         self.max_iter = max_iter
         self.embed_vec_len = embed_vec_len
         self.learning_rate = learning_rate
+        self.bidirectional = bidirectional
 
         self.embedding_initializer = None
 
@@ -482,7 +495,8 @@ class GloVE_Model(LSTM_Model):
                       'remove_stopwords': self.remove_stopwords,
                       'lemmatize': self.lemmatize,
                       'finetune_embeddings': self.finetune_embeddings,
-                      'learning_rate': self.learning_rate
+                      'learning_rate': self.learning_rate,
+                      'bidirectional': self.bidirectional
                       }
 
         if parameters['bootstrap'] < 1:
