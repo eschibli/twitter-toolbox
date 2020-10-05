@@ -30,12 +30,19 @@ stream.collect_from_stream(max_tweets=10,output_json_name="python_tweets.json", 
 
 "credentials" contains your Twitter API key, which can be obtained for free [here](https://developer.twitter.com/en/docs/basics/developer-portal/overview)
 
-The module also contains a parser to convert the .json-formatted tweets into .csv for easy use (ie, with Pandas).
+The module also contains a parser to convert the .json-formatted tweets into .csv for easy use (ie, with Pandas) or convert straight to a pandas dataframe.
 
 ```python
 parser = tweet_json_parser.json_parser()
 parser.stream_json_file(json_file_name="python_tweets.json",output_file_name="parsed_python_tweets.csv")
 ```
+
+# Alternatively, the parser can also convert the json file to a pandas dataframe
+```python
+parser = tweet_json_parser.json_parser()
+df = parser.parse_json_file_into_dataframe(json_file_name="ai_tweets.json")
+```
+
 
 ## Bulk Downloader
 
